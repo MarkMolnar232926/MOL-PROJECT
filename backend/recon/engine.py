@@ -6,6 +6,7 @@ list of manual tie decisions, so a session can simply re-run it after every chan
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -591,10 +592,10 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, out) ->
                 Discrepancy(
                     kind=DiscrepancyKind.UNRESOLVED_TIE,
                     sap_row=r,
-                    asset_id=suggested,
                     message=(
                         f"{g.sap_type} ({g.year}) in tie group {g.group_id}: the attributes "
-                        "cannot tell these units apart; a decision is needed."
+                        "cannot tell these units apart; a decision is needed "
+                        f"(suggested: {suggested or 'leave unmatched'})."
                     ),
                 )
             )
@@ -859,3 +860,25 @@ def validate_tie_assignments(group: TieGroup, assignments: list[TieAssignment]) 
             )
     if problems:
         raise TieDecisionError("The tie decision is not valid.", problems)
+
+
+def accept_suggestions(
+    result: ReconResult, group_ids: set[str] | None = None, now: dt.datetime | None = None
+) -> list[ManualDecision]:
+    """Existing decisions plus a decision confirming every pending suggestion (optionally
+    only in ``group_ids``)."""
+    now = now or dt.datetime.now(dt.UTC)
+    added = [
+        ManualDecision(
+            group_id=g.group_id,
+            sap_row=s.sap_row,
+            asset_id=s.suggested_asset_id,
+            proposed_asset_id=s.suggested_asset_id,
+            decided_at=now,
+        )
+        for g in result.tie_groups
+        if group_ids is None or g.group_id in group_ids
+        for s in g.slots
+        if not s.decided
+    ]
+    return list(result.decisions) + added
