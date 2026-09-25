@@ -214,6 +214,12 @@ export interface components {
             sap_row?: number | null;
             /** Asset Id */
             asset_id?: string | null;
+            /** Code */
+            code: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | null;
+            };
             /** Message */
             message: string;
         };
@@ -275,6 +281,20 @@ export interface components {
          * @enum {string}
          */
         MatchStatus: "Matched" | "Matched – location mismatch" | "Needs decision" | "Manually resolved" | "Physical only" | "SAP only" | "Defective – excluded" | "Duplicate entry" | "Unclassified";
+        /**
+         * Note
+         * @description One message: ``code`` + ``params`` for translation, ``text`` in English.
+         */
+        Note: {
+            /** Code */
+            code: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | null;
+            };
+            /** Text */
+            text: string;
+        };
         /**
          * Pair
          * @description A physical↔SAP pairing, including provisional tie suggestions.
@@ -340,7 +360,7 @@ export interface components {
             /** Duplicate Of */
             duplicate_of?: number | null;
             /** Notes */
-            notes?: string[];
+            notes?: components["schemas"]["Note"][];
         };
         /** SapRow */
         SapRow: {
@@ -379,7 +399,7 @@ export interface components {
             /** Duplicate Of */
             duplicate_of?: number | null;
             /** Notes */
-            notes?: string[];
+            notes?: components["schemas"]["Note"][];
         };
         /** SessionCreated */
         SessionCreated: {
@@ -388,7 +408,7 @@ export interface components {
             /** Detected */
             detected: components["schemas"]["DetectedSheet"][];
             /** Warnings */
-            warnings: string[];
+            warnings: components["schemas"]["Note"][];
             summary: components["schemas"]["Summary"];
         };
         /** SessionResult */
@@ -407,7 +427,7 @@ export interface components {
             /** Decisions */
             decisions: components["schemas"]["ManualDecision"][];
             /** Warnings */
-            warnings: string[];
+            warnings: components["schemas"]["Note"][];
             /** Session Id */
             session_id: string;
             /** Detected */

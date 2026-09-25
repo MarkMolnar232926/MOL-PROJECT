@@ -18,6 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from .config import AppConfig, Source, SourceSpec, default_config, normalize_header
 from .errors import InvalidFileError, MissingColumnsError, SheetDetectionError
+from .messages import Note, note
 
 ALLOWED_EXTENSIONS = (".xlsx", ".xlsm")
 SOURCES: tuple[Source, ...] = ("physical", "sap")
@@ -55,7 +56,7 @@ class SheetData:
 class LoadedInput:
     physical: SheetData
     sap: SheetData
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[Note] = field(default_factory=list)
 
     def sheet(self, source: Source) -> SheetData:
         return self.physical if source == "physical" else self.sap
@@ -234,14 +235,18 @@ def load_inputs(files: list[InputFile], cfg: AppConfig | None = None) -> LoadedI
         if problems:
             _raise_detection_problems(problems, candidates)
 
-        warnings: list[str] = []
+        warnings: list[Note] = []
         sheets: dict[Source, SheetData] = {}
         for source, (cand, detected_by) in chosen.items():
             spec = cfg.columns.source(source)
             if cand.file.role not in (None, source):
                 warnings.append(
-                    f"{SOURCE_LABELS[source]} was found in '{cand.file.name}', which was uploaded "
-                    f"as the {cand.file.role} file. The files may have been swapped."
+                    note(
+                        "files_swapped",
+                        sheet=SOURCE_LABELS[source],
+                        file=cand.file.name,
+                        role=cand.file.role,
+                    )
                 )
             ws = workbooks[cand.workbook_index][cand.sheet_name]
             frame, column_fills = _read_frame(ws, cand.headers)

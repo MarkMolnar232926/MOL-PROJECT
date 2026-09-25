@@ -1,4 +1,5 @@
 import type { Confidence, MatchStatus } from "../api/client";
+import { useT } from "../i18n";
 
 const STATUS_CLASSES: Record<MatchStatus, string> = {
   Matched: "bg-green-100 text-green-800 ring-green-600/20",
@@ -22,10 +23,16 @@ const CONFIDENCE_CLASSES: Record<Confidence, string> = {
 const BASE = "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset";
 
 export function StatusBadge({ status }: { status: MatchStatus }) {
-  return <span className={`${BASE} ${STATUS_CLASSES[status]}`}>{status}</span>;
+  const t = useT();
+  return <span className={`${BASE} ${STATUS_CLASSES[status]}`}>{t.status[status] ?? status}</span>;
 }
 
 export function ConfidenceBadge({ confidence }: { confidence: Confidence | null | undefined }) {
+  const t = useT();
   if (!confidence) return null;
-  return <span className={`${BASE} ${CONFIDENCE_CLASSES[confidence]}`}>{confidence}</span>;
+  return (
+    <span className={`${BASE} ${CONFIDENCE_CLASSES[confidence]}`}>
+      {t.confidence[confidence] ?? confidence}
+    </span>
+  );
 }

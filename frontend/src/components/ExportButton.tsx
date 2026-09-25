@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { api, ApiError } from "../api/client";
-import { t } from "../i18n/en";
+import { api } from "../api/client";
+import { errorText, useT } from "../i18n";
 import { ConfirmDialog } from "./Dialog";
 
 type Props = { sessionId: string | null; pendingSlots: number };
@@ -17,6 +17,7 @@ function download(blob: Blob, filename: string) {
 }
 
 export function ExportButton({ sessionId, pendingSlots }: Props) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function ExportButton({ sessionId, pendingSlots }: Props) {
       const { blob, filename } = await api.exportWorkbook(sessionId);
       download(blob, filename);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
+      setError(errorText(t, e));
     } finally {
       setBusy(false);
     }

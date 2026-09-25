@@ -66,7 +66,20 @@ the engine skips it (`ignored_sheets` in `columns.yaml`).
    you are asked first; those rows are exported with an empty Asset ID.
 6. **Rules** shows the type rules, locations and cost weights (read-only).
 
-UI text lives in `frontend/src/i18n/en.ts`.
+### Languages
+
+The header has a language picker (English / Magyar). The choice is remembered in the browser;
+on the first visit Hungarian is picked automatically if the browser is set to Hungarian.
+
+- UI text: one file per language in `frontend/src/i18n/` (`en.ts`, `hu.ts`). `hu.ts` must have
+  the same shape as `en.ts` (TypeScript checks this).
+- Server messages (notes, discrepancy explanations, warnings) are sent as a `code` plus
+  `params`; their wording lives in `backend/recon/messages.py` (English, used by the Excel
+  export) and in the `messages` section of each UI language file. A test fails if a code is
+  missing from a language.
+- To add a language: copy `en.ts` to e.g. `de.ts`, translate it, and register it in
+  `frontend/src/i18n/index.tsx` (`LANGUAGES`).
+- The Excel export is always in English.
 
 ## Configuration
 

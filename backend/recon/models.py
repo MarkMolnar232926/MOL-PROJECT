@@ -7,6 +7,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, computed_field
 
+from .messages import Note, Param
+
 
 class MatchStatus(StrEnum):
     MATCHED = "Matched"
@@ -60,7 +62,7 @@ class PhysicalRow(BaseModel):
     matched_sap_row: int | None = None
     tie_group_id: str | None = None
     duplicate_of: int | None = None
-    notes: list[str] = Field(default_factory=list)
+    notes: list[Note] = Field(default_factory=list)
 
 
 class SapRow(BaseModel):
@@ -82,7 +84,7 @@ class SapRow(BaseModel):
     matched_physical_row: int | None = None
     tie_group_id: str | None = None
     duplicate_of: int | None = None
-    notes: list[str] = Field(default_factory=list)
+    notes: list[Note] = Field(default_factory=list)
 
 
 class Pair(BaseModel):
@@ -157,7 +159,13 @@ class Discrepancy(BaseModel):
     physical_row: int | None = None
     sap_row: int | None = None
     asset_id: str | None = None
-    message: str
+    code: str  # message code (see recon.messages); the web app translates it
+    params: dict[str, Param] = Field(default_factory=dict)
+    message: str  # English text
+
+    @classmethod
+    def of(cls, kind: DiscrepancyKind, msg: Note, **refs) -> Discrepancy:
+        return cls(kind=kind, code=msg.code, params=msg.params, message=msg.text, **refs)
 
 
 class Summary(BaseModel):
@@ -183,4 +191,4 @@ class ReconResult(BaseModel):
     tie_groups: list[TieGroup]
     discrepancies: list[Discrepancy]
     decisions: list[ManualDecision]
-    warnings: list[str]
+    warnings: list[Note]

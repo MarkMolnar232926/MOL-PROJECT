@@ -189,7 +189,7 @@ def test_qr_codes_are_labels_only(result):
     assert all(r.qr_code and r.qr_code.startswith("INV") for r in result.sap_rows)
     tie_slots = [s for g in result.tie_groups for s in g.slots]
     assert all(s.qr_code for s in tie_slots)
-    assert not any("QR" in n for r in result.sap_rows for n in r.notes)
+    assert not any("QR" in n.text for r in result.sap_rows for n in r.notes)
     assert "QR disagreement" not in {k.value for k in DiscrepancyKind}
 
 

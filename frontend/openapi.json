@@ -567,6 +567,30 @@
             ],
             "title": "Asset Id"
           },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          },
           "message": {
             "type": "string",
             "title": "Message"
@@ -575,6 +599,7 @@
         "type": "object",
         "required": [
           "kind",
+          "code",
           "message"
         ],
         "title": "Discrepancy"
@@ -731,6 +756,45 @@
           "Unclassified"
         ],
         "title": "MatchStatus"
+      },
+      "Note": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "Note",
+        "description": "One message: ``code`` + ``params`` for translation, ``text`` in English."
       },
       "Pair": {
         "properties": {
@@ -1003,7 +1067,7 @@
           },
           "notes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Notes"
@@ -1216,7 +1280,7 @@
           },
           "notes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Notes"
@@ -1255,7 +1319,7 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Warnings"
@@ -1322,7 +1386,7 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Warnings"

@@ -61,7 +61,7 @@ def main(argv: list[str]) -> int:
             f"missing optional: {sheet.missing_optional or 'none'}"
         )
     for w in loaded.warnings:
-        print("WARNING:", w)
+        print("WARNING:", w.text)
 
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         print("\nPhysical_Inventory (first 10):")

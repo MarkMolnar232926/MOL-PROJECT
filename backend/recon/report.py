@@ -45,7 +45,7 @@ def format_report(res: ReconResult) -> str:
     for d in res.discrepancies:
         counts[d.kind.value] = counts.get(d.kind.value, 0) + 1
     out += ["", "Discrepancies: " + (", ".join(f"{k} {v}" for k, v in counts.items()) or "none")]
-    out += [f"WARNING: {w}" for w in res.warnings]
+    out += [f"WARNING: {w.text}" for w in res.warnings]
     return "\n".join(out)
 
 

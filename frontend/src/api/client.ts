@@ -14,6 +14,8 @@ export type TieSlot = S["TieSlot"];
 export type TieCandidate = S["TieCandidate"];
 export type TieAssignment = S["TieAssignment"];
 export type Summary = S["Summary"];
+export type Note = S["Note"];
+export type MessageParams = NonNullable<Note["params"]>;
 export type MatchStatus = SapRow["match_status"];
 export type Confidence = NonNullable<SapRow["confidence"]>;
 

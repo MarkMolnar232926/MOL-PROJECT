@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { t } from "../i18n/en";
+import { errorText, useT } from "../i18n";
 
 export function RulesPage() {
+  const t = useT();
   const config = useQuery({ queryKey: ["config"], queryFn: api.config });
   if (config.isPending) return <p>{t.loading}</p>;
-  if (config.isError) return <p role="alert">{config.error.message}</p>;
+  if (config.isError) return <p role="alert">{errorText(t, config.error)}</p>;
   const c = config.data;
   const th = "px-2 py-1.5 text-left font-semibold";
   const td = "px-2 py-1 border-t border-slate-100";

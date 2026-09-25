@@ -139,7 +139,7 @@ def _sap_sheet(ws: Worksheet, sheet: SheetData, result: ReconResult) -> None:
                 r.match_status.value,
                 r.confidence.value if r.confidence else None,
                 r.matched_physical_row,
-                " ".join(r.notes) or None,
+                " ".join(n.text for n in r.notes) or None,
             ]
         )
         statuses.append(r.match_status)
@@ -156,7 +156,12 @@ def _physical_sheet(ws: Worksheet, sheet: SheetData, result: ReconResult) -> Non
         r = by_row[excel_row]
         rows.append(
             list(values)
-            + [r.match_status.value, r.matched_sap_row, r.sap_type, " ".join(r.notes) or None]
+            + [
+                r.match_status.value,
+                r.matched_sap_row,
+                r.sap_type,
+                " ".join(n.text for n in r.notes) or None,
+            ]
         )
         statuses.append(r.match_status)
     _write_table(ws, sheet.headers + PHYSICAL_EXTRA, rows)
@@ -213,7 +218,7 @@ def _summary_sheet(
     rows += [["Physical status", k, v] for k, v in _ordered(s.physical_status_counts)]
     rows += [["SAP status", k, v] for k, v in _ordered(s.sap_status_counts)]
     rows += [["Confidence", k, v] for k, v in sorted(s.confidence_counts.items())]
-    rows += [["Warning", "", w] for w in result.warnings]
+    rows += [["Warning", "", w.text] for w in result.warnings]
     _write_table(ws, ["Section", "Item", "Value"], rows)
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react";
-import { t } from "../i18n/en";
+import { useT } from "../i18n";
 
 type Props = {
   title: string;
@@ -11,6 +11,7 @@ type Props = {
 
 /** A small modal confirmation dialog (focus moves to it; Escape cancels). */
 export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel }: Props) {
+  const t = useT();
   const titleId = useId();
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {

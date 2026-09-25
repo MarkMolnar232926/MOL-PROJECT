@@ -18,6 +18,7 @@ from scipy.optimize import linear_sum_assignment
 from .config import AppConfig, TypeRule, default_config
 from .errors import ReconError
 from .loader import EXCEL_ROW, SheetData
+from .messages import Note, note
 from .models import (
     Confidence,
     Discrepancy,
@@ -284,7 +285,7 @@ def reconcile(
     sap = _records(data.sap)
     excluded = {_norm(s) for s in cfg.matching.excluded_statuses}
     discrepancies: list[Discrepancy] = []
-    warnings: list[str] = list(loaded.warnings)
+    warnings: list[Note] = list(loaded.warnings)
 
     phys_dup = find_duplicates(loaded.physical)
     sap_dup = find_duplicates(loaded.sap)
@@ -344,7 +345,7 @@ def reconcile(
         for r, p in sorted(phys.items())
     ]
     for p in pairs:
-        _pair_flags(p, phys[p.physical_row], discrepancies)
+        _pair_flags(p, phys[p.physical_row], sap[p.sap_row], discrepancies)
 
     summary = _summary(phys_rows, sap_rows, pairs, groups, kept_decisions, cfg)
     return ReconResult(
@@ -362,16 +363,16 @@ def reconcile(
 def _data_quality(phys, sap, phys_dup, sap_dup, data, out: list[Discrepancy]) -> None:
     for issue in data.issues:
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DATA_QUALITY,
+            Discrepancy.of(
+                DiscrepancyKind.DATA_QUALITY,
+                issue.note,
                 physical_row=issue.excel_row if issue.source == "physical" else None,
                 sap_row=issue.excel_row if issue.source == "sap" else None,
-                message=issue.message,
             )
         )
-    for label, rows, dups, key, col in (
-        ("Asset ID", phys, phys_dup, "physical_row", "asset_id"),
-        ("QR code", sap, sap_dup, "sap_row", "qr_code"),
+    for code, rows, dups, key, col in (
+        ("asset_id_conflict", phys, phys_dup, "physical_row", "asset_id"),
+        ("qr_code_conflict", sap, sap_dup, "sap_row", "qr_code"),
     ):
         seen: dict[str, list[int]] = defaultdict(list)
         for r, row in rows.items():
@@ -380,20 +381,17 @@ def _data_quality(phys, sap, phys_dup, sap_dup, data, out: list[Discrepancy]) ->
         for value, where in seen.items():
             if len(where) > 1:
                 out.append(
-                    Discrepancy(
-                        kind=DiscrepancyKind.DATA_QUALITY,
+                    Discrepancy.of(
+                        DiscrepancyKind.DATA_QUALITY,
+                        note(code, value=value, rows=", ".join(map(str, where))),
                         **{key: where[0]},
                         asset_id=value if col == "asset_id" else None,
-                        message=(
-                            f"{label} {value} appears on rows {', '.join(map(str, where))} "
-                            "whose other values differ (not a plain double entry)."
-                        ),
                     )
                 )
 
 
 def _build_ties(
-    m: _Matcher, core: _Core, decisions: list[ManualDecision], warnings: list[str]
+    m: _Matcher, core: _Core, decisions: list[ManualDecision], warnings: list[Note]
 ) -> tuple[list[TieGroup], list[ManualDecision]]:
     groups: list[TieGroup] = []
     kept: list[ManualDecision] = []
@@ -433,10 +431,7 @@ def _build_ties(
             if d is None:
                 continue
             if d.asset_id is not None and (d.asset_id not in cand_ids or d.asset_id in used):
-                warnings.append(
-                    f"Manual decision for SAP row {sr} (asset {d.asset_id}) no longer fits "
-                    "its tie group and was dropped."
-                )
+                warnings.append(note("decision_invalid", sap_row=sr, asset_id=d.asset_id))
                 continue
             chosen[sr] = d.asset_id
             if d.asset_id is not None:
@@ -493,10 +488,7 @@ def _build_ties(
 
     for sr in by_sap:
         if sr not in in_any_group:
-            warnings.append(
-                f"Manual decision for SAP row {sr} was dropped: "
-                "that row no longer needs a decision."
-            )
+            warnings.append(note("decision_stale", sap_row=sr))
     return groups, kept
 
 
@@ -519,7 +511,7 @@ def _pair_confidence(m: _Matcher, core: _Core, sr: int, pr: int, g, provisional:
 
 
 def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, out) -> SapRow:
-    notes: list[str] = []
+    notes: list[Note] = []
     pair = pair_by_sap.get(r)
     g = tie_of_sap.get(r)
     asset_id = suggested = None
@@ -527,30 +519,27 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, out) -> SapRow:
     matched_row = None
     if r in sap_dup:
         status = MatchStatus.DUPLICATE
-        notes.append(f"Identical to SAP row {sap_dup[r]} (double data entry).")
-        out.append(Discrepancy(kind=DiscrepancyKind.DUPLICATE, sap_row=r, message=notes[-1]))
+        notes.append(note("sap_duplicate", first=sap_dup[r]))
+        out.append(Discrepancy.of(DiscrepancyKind.DUPLICATE, notes[-1], sap_row=r))
     elif g is not None:
         slot = next(sl for sl in g.slots if sl.sap_row == r)
         if not slot.decided:
             status, confidence = MatchStatus.NEEDS_DECISION, Confidence.NEEDS_DECISION
             suggested = slot.suggested_asset_id
             matched_row = pair.physical_row if pair else None
-            notes.append(f"Tie group {g.group_id}: pick the physical unit (suggested {suggested}).")
-            out.append(
-                Discrepancy(
-                    kind=DiscrepancyKind.UNRESOLVED_TIE,
-                    sap_row=r,
-                    message=(
-                        f"{g.sap_type} ({g.year}) in tie group {g.group_id}: the attributes "
-                        "cannot tell these units apart; a decision is needed "
-                        f"(suggested: {suggested or 'leave unmatched'})."
-                    ),
-                )
+            notes.append(note("tie_pick", group=g.group_id, suggested=suggested))
+            msg = note(
+                "tie_unresolved",
+                sap_type=g.sap_type,
+                year=g.year,
+                group=g.group_id,
+                suggested=suggested,
             )
+            out.append(Discrepancy.of(DiscrepancyKind.UNRESOLVED_TIE, msg, sap_row=r))
         elif slot.chosen_asset_id is None:
             status, confidence = MatchStatus.SAP_ONLY, Confidence.MANUAL
-            notes.append("Manually left unmatched.")
-            out.append(Discrepancy(kind=DiscrepancyKind.SAP_ONLY, sap_row=r, message=notes[-1]))
+            notes.append(note("manual_unmatched"))
+            out.append(Discrepancy.of(DiscrepancyKind.SAP_ONLY, notes[-1], sap_row=r))
         else:
             status, confidence = MatchStatus.MANUAL, Confidence.MANUAL
             asset_id, matched_row = pair.asset_id, pair.physical_row
@@ -559,8 +548,8 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, out) -> SapRow:
         status = MatchStatus.LOCATION_MISMATCH if pair.location_mismatch else MatchStatus.MATCHED
     else:
         status = MatchStatus.SAP_ONLY
-        msg = f"No physical unit found for this {s['item_name']} (missing / lost asset)."
-        out.append(Discrepancy(kind=DiscrepancyKind.SAP_ONLY, sap_row=r, message=msg))
+        msg = note("sap_only", item=s["item_name"])
+        out.append(Discrepancy.of(DiscrepancyKind.SAP_ONLY, msg, sap_row=r))
     return SapRow(
         excel_row=r,
         item_name=s["item_name"],
@@ -585,40 +574,35 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, out) -> SapRow:
 
 
 def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> PhysicalRow:
-    notes: list[str] = []
+    notes: list[Note] = []
     match = phys_match.get(r)
     g = tie_of_phys.get(r)
     confidence = None
     matched_sap = None
     if r in phys_dup:
         status = MatchStatus.DUPLICATE
-        notes.append(f"Identical to physical row {phys_dup[r]} (double data entry).")
+        notes.append(note("physical_duplicate", first=phys_dup[r]))
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DUPLICATE,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=notes[-1],
+            Discrepancy.of(
+                DiscrepancyKind.DUPLICATE, notes[-1], physical_row=r, asset_id=p["asset_id"]
             )
         )
     elif p["_defective"]:
         status = MatchStatus.DEFECTIVE
-        notes.append("Defective – excluded (expected to be absent from SAP).")
+        notes.append(note("defective_excluded"))
     elif p["sap_type"] is None:
         status = MatchStatus.UNCLASSIFIED
-        notes.append("No type rule matches this item name and description.")
+        notes.append(note("unclassified_note"))
+        msg = note("unclassified", item=p["item_name"], description=p["description"])
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.UNCLASSIFIED,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=f"'{p['item_name']}: {p['description']}' matches no type rule.",
+            Discrepancy.of(
+                DiscrepancyKind.UNCLASSIFIED, msg, physical_row=r, asset_id=p["asset_id"]
             )
         )
     elif g is not None and (match is None or match[1]) and g.pending_slots:
         status, confidence = MatchStatus.NEEDS_DECISION, Confidence.NEEDS_DECISION
         matched_sap = match[0] if match else None
-        notes.append(f"Candidate in tie group {g.group_id}.")
+        notes.append(note("tie_candidate", group=g.group_id))
     elif match is not None:
         sr, _ = match
         pair = pair_by_sap[sr]
@@ -632,14 +616,11 @@ def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> Phys
     else:
         status = MatchStatus.PHYSICAL_ONLY
         if g is not None:
-            notes.append("Left unmatched by the manual tie decisions.")
-        msg = f"No SAP row found for this {p['sap_type']} (asset {p['asset_id']})."
+            notes.append(note("manual_left_physical"))
+        msg = note("physical_only", sap_type=p["sap_type"], asset_id=p["asset_id"])
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.PHYSICAL_ONLY,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=msg,
+            Discrepancy.of(
+                DiscrepancyKind.PHYSICAL_ONLY, msg, physical_row=r, asset_id=p["asset_id"]
             )
         )
     return PhysicalRow(
@@ -667,34 +648,18 @@ def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> Phys
     )
 
 
-def _pair_flags(pair: Pair, p: dict, out: list[Discrepancy]) -> None:
+def _pair_flags(pair: Pair, p: dict, s: dict, out: list[Discrepancy]) -> None:
     if pair.provisional:
         return
     ref = {"physical_row": pair.physical_row, "sap_row": pair.sap_row, "asset_id": pair.asset_id}
     if pair.location_mismatch:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.LOCATION_MISMATCH,
-                **ref,
-                message=f"Physical says {p['city']}, SAP says a different building.",
-            )
-        )
+        msg = note("location_mismatch", city=p["city"], building=s["building"])
+        out.append(Discrepancy.of(DiscrepancyKind.LOCATION_MISMATCH, msg, **ref))
     if p["deactivation_date"] is not None:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DEACTIVATED,
-                **ref,
-                message="Deactivated but present in SAP (has a deactivation date).",
-            )
-        )
+        out.append(Discrepancy.of(DiscrepancyKind.DEACTIVATED, note("deactivated"), **ref))
     if pair.year_gap:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.YEAR_GAP,
-                **ref,
-                message=f"Activation year and serial year differ by {pair.year_gap}.",
-            )
-        )
+        msg = note("year_gap", gap=pair.year_gap)
+        out.append(Discrepancy.of(DiscrepancyKind.YEAR_GAP, msg, **ref))
 
 
 def _summary(phys_rows, sap_rows, pairs, groups, decisions, cfg) -> Summary:

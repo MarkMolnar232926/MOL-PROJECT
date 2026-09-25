@@ -1,5 +1,5 @@
 import type { PhysicalRow, SapRow } from "../api/client";
-import { t } from "../i18n/en";
+import { noteText, useT } from "../i18n";
 import { ConfidenceBadge, StatusBadge } from "./Badge";
 
 type Props = { sap: SapRow | null; physical: PhysicalRow | null; onClose: () => void };
@@ -11,6 +11,7 @@ const norm = (v: unknown) => show(v).toLowerCase();
 
 /** Side-by-side view of a SAP row and its matched physical unit; differing fields highlighted. */
 export function PairDetail({ sap, physical, onClose }: Props) {
+  const t = useT();
   const year = physical?.activation_date ? Number(physical.activation_date.slice(0, 4)) : null;
   const fields: Field[] = [
     { label: t.cols.row, sap: sap?.excel_row, physical: physical?.excel_row },
@@ -70,7 +71,9 @@ export function PairDetail({ sap, physical, onClose }: Props) {
       {(!sap || !physical) && <p className="mt-2 text-sm text-slate-500">{t.detail.noCounterpart}</p>}
       {[...(sap?.notes ?? []), ...(physical?.notes ?? [])].length > 0 && (
         <ul className="mt-2 list-disc pl-5 text-sm text-slate-700">
-          {[...(sap?.notes ?? []), ...(physical?.notes ?? [])].map((n) => <li key={n}>{n}</li>)}
+          {[...(sap?.notes ?? []), ...(physical?.notes ?? [])].map((n, i) => (
+            <li key={i}>{noteText(t, n)}</li>
+          ))}
         </ul>
       )}
     </section>

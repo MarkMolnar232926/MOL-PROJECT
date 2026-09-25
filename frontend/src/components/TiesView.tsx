@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { TieAssignment, TieGroup } from "../api/client";
-import { t } from "../i18n/en";
+import { useT } from "../i18n";
 import { ConfirmDialog } from "./Dialog";
 import { TieGroupCard } from "./TieGroupCard";
 
@@ -13,6 +13,7 @@ type Props = {
 };
 
 export function TiesView({ groups, busy, onSave, onReset, onAcceptAll }: Props) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const total = groups.reduce((n, g) => n + g.slots.length, 0);
   const pending = groups.reduce((n, g) => n + g.pending_slots, 0);

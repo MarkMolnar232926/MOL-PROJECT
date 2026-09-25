@@ -231,7 +231,7 @@ def test_qr_codes_never_influence_matching():
     # FIFO suggestion (oldest unit <-> lowest serial), regardless of what the QR codes say
     assert {s.sap_row: s.suggested_asset_id for s in g.slots} == {3: "22222222", 2: "11111111"}
     assert {s.sap_row: s.qr_code for s in g.slots} == {2: "INV0022222222", 3: "INV0011111111"}
-    assert not any("QR" in n for r in res.sap_rows for n in r.notes)
+    assert not any("QR" in n.text for r in res.sap_rows for n in r.notes)
 
 
 def test_missing_qr_column_is_fine():
@@ -325,6 +325,45 @@ def test_decisions_survive_rerun_or_are_dropped_with_warning():
     assert again.decisions == decisions and again.warnings == []
     stale = reconcile(data, decisions=[decide(g, 99, "1")])  # row 99 is not a tie slot
     assert stale.decisions == []
-    assert any("row 99" in w for w in stale.warnings)
+    assert [w.code for w in stale.warnings] == ["decision_stale"]
+    assert "row 99" in stale.warnings[0].text
     invalid = reconcile(data, decisions=[decide(g, 2, "99")])
-    assert invalid.decisions == [] and invalid.warnings
+    assert invalid.decisions == []
+    assert [w.code for w in invalid.warnings] == ["decision_invalid"]
+
+
+# --- messages -------------------------------------------------------------------------------
+
+
+def test_every_message_has_a_code_params_and_english_text():
+    from recon.messages import EN
+
+    data = make_input(
+        [phys(1, "bin", "bin, grey", deact=(2024, 1, 1)), phys(2, "lamp", "desk lamp, red")],
+        [sap("Trash Bin", "Grey", 30, "SN-2021-1", "LKS"), sap("Safe", "Grey", 50, "SN-2020-1")],
+    )
+    res = reconcile(data)
+    notes = [n for r in [*res.sap_rows, *res.physical_rows] for n in r.notes]
+    assert notes and all(n.code in EN and n.text == EN[n.code](n.params) for n in notes)
+    assert all(d.code in EN and d.message == EN[d.code](d.params) for d in res.discrepancies)
+    mismatch = next(d for d in res.discrepancies if d.kind is DiscrepancyKind.LOCATION_MISMATCH)
+    assert mismatch.code == "location_mismatch"
+    assert mismatch.params == {"city": "Riverside", "building": "LKS"}
+    assert {d.code for d in res.discrepancies} >= {"deactivated", "sap_only", "unclassified"}
+
+
+def test_web_app_translates_every_message_code():
+    """Each server message code needs a text in every web-app language."""
+    import re
+
+    from conftest import REPO_ROOT
+
+    from recon.messages import EN
+
+    for lang in ("en", "hu"):
+        source = (REPO_ROOT / "frontend" / "src" / "i18n" / f"{lang}.ts").read_text("utf-8")
+        start = source.index("  messages: {")
+        end = re.compile(r"^  \}", re.MULTILINE).search(source, start).start()
+        block = source[start:end]
+        keys = set(re.findall(r"^    ([a-z_]+): ", block, re.MULTILINE))
+        assert keys == set(EN), (lang, set(EN) ^ keys)

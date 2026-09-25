@@ -15,62 +15,75 @@ import { KpiTiles } from "../components/KpiTiles";
 import { PairDetail } from "../components/PairDetail";
 import { suggestionAssignments } from "../components/tieOptions";
 import { TiesView } from "../components/TiesView";
-import { t } from "../i18n/en";
+import { discrepancyText, errorText, noteText, useT, type Messages } from "../i18n";
 
 type Tab = "sap" | "physical" | "discrepancies" | "ties";
 
 const sapCol = columnHelper<SapRow>();
-const sapColumns: Columns<SapRow> = sapCol.columns([
-  sapCol.accessor("excel_row", { header: t.cols.row }),
-  sapCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
-  sapCol.accessor("item_name", { header: t.cols.sapItem }),
-  sapCol.accessor("color", { header: t.cols.color }),
-  sapCol.accessor("width_cm", { header: t.cols.width }),
-  sapCol.accessor("serial_no", { header: t.cols.serial }),
-  sapCol.accessor("building", { header: t.cols.building }),
-  sapCol.accessor("match_status", {
-    header: t.cols.status,
-    cell: (c) => <StatusBadge status={c.getValue()} />,
-  }),
-  sapCol.accessor((r) => r.confidence ?? "", {
-    id: "confidence",
-    header: t.cols.confidence,
-    cell: (c) => <ConfidenceBadge confidence={c.row.original.confidence} />,
-  }),
-  sapCol.accessor((r) => r.matched_physical_row ?? "", { id: "matched", header: t.cols.matchedRow }),
-  sapCol.accessor((r) => r.qr_code ?? "", { id: "qr_code", header: t.cols.qr }),
-  sapCol.accessor((r) => (r.notes ?? []).join(" "), { id: "notes", header: t.cols.notes }),
-]);
-
 const physCol = columnHelper<PhysicalRow>();
-const physicalColumns: Columns<PhysicalRow> = physCol.columns([
-  physCol.accessor("excel_row", { header: t.cols.row }),
-  physCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
-  physCol.accessor("item_name", { header: t.cols.itemName }),
-  physCol.accessor("description", { header: t.cols.description }),
-  physCol.accessor((r) => r.sap_type ?? "", { id: "sap_type", header: t.cols.sapItem }),
-  physCol.accessor("city", { header: t.cols.city }),
-  physCol.accessor((r) => r.activation_date ?? "", { id: "activation", header: t.cols.activation }),
-  physCol.accessor("match_status", {
-    header: t.cols.status,
-    cell: (c) => <StatusBadge status={c.getValue()} />,
-  }),
-  physCol.accessor((r) => r.matched_sap_row ?? "", { id: "matched", header: t.cols.matchedRow }),
-  physCol.accessor((r) => (r.notes ?? []).join(" "), { id: "notes", header: t.cols.notes }),
-]);
+type DiscrepancyRow = Discrepancy & { id: string };
+const discCol = columnHelper<DiscrepancyRow>();
 
-const discCol = columnHelper<Discrepancy & { id: string }>();
-const discrepancyColumns: Columns<Discrepancy & { id: string }> = discCol.columns([
-  discCol.accessor("kind", { header: t.cols.issue }),
-  discCol.accessor((r) => r.physical_row ?? "", { id: "physical_row", header: t.cols.physicalRow }),
-  discCol.accessor((r) => r.sap_row ?? "", { id: "sap_row", header: t.cols.sapRow }),
-  discCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
-  discCol.accessor("message", { header: t.cols.explanation }),
-]);
+// Status and issue columns hold the translated label, so the text filter works in any language.
+const sapColumns = (t: Messages): Columns<SapRow> =>
+  sapCol.columns([
+    sapCol.accessor("excel_row", { header: t.cols.row }),
+    sapCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
+    sapCol.accessor("item_name", { header: t.cols.sapItem }),
+    sapCol.accessor("color", { header: t.cols.color }),
+    sapCol.accessor("width_cm", { header: t.cols.width }),
+    sapCol.accessor("serial_no", { header: t.cols.serial }),
+    sapCol.accessor("building", { header: t.cols.building }),
+    sapCol.accessor((r) => t.status[r.match_status], {
+      id: "match_status",
+      header: t.cols.status,
+      cell: (c) => <StatusBadge status={c.row.original.match_status} />,
+    }),
+    sapCol.accessor((r) => (r.confidence ? t.confidence[r.confidence] : ""), {
+      id: "confidence",
+      header: t.cols.confidence,
+      cell: (c) => <ConfidenceBadge confidence={c.row.original.confidence} />,
+    }),
+    sapCol.accessor((r) => r.matched_physical_row ?? "", { id: "matched", header: t.cols.matchedRow }),
+    sapCol.accessor((r) => r.qr_code ?? "", { id: "qr_code", header: t.cols.qr }),
+    sapCol.accessor((r) => (r.notes ?? []).map((n) => noteText(t, n)).join(" "), { id: "notes", header: t.cols.notes }),
+  ]);
+
+const physicalColumns = (t: Messages): Columns<PhysicalRow> =>
+  physCol.columns([
+    physCol.accessor("excel_row", { header: t.cols.row }),
+    physCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
+    physCol.accessor("item_name", { header: t.cols.itemName }),
+    physCol.accessor("description", { header: t.cols.description }),
+    physCol.accessor((r) => r.sap_type ?? "", { id: "sap_type", header: t.cols.sapItem }),
+    physCol.accessor("city", { header: t.cols.city }),
+    physCol.accessor((r) => r.activation_date ?? "", { id: "activation", header: t.cols.activation }),
+    physCol.accessor((r) => t.status[r.match_status], {
+      id: "match_status",
+      header: t.cols.status,
+      cell: (c) => <StatusBadge status={c.row.original.match_status} />,
+    }),
+    physCol.accessor((r) => r.matched_sap_row ?? "", { id: "matched", header: t.cols.matchedRow }),
+    physCol.accessor((r) => (r.notes ?? []).map((n) => noteText(t, n)).join(" "), { id: "notes", header: t.cols.notes }),
+  ]);
+
+const discrepancyColumns = (t: Messages): Columns<DiscrepancyRow> =>
+  discCol.columns([
+    discCol.accessor((r) => t.issue[r.kind] ?? r.kind, { id: "kind", header: t.cols.issue }),
+    discCol.accessor((r) => r.physical_row ?? "", { id: "physical_row", header: t.cols.physicalRow }),
+    discCol.accessor((r) => r.sap_row ?? "", { id: "sap_row", header: t.cols.sapRow }),
+    discCol.accessor((r) => r.asset_id ?? "", { id: "asset_id", header: t.cols.assetId }),
+    discCol.accessor((r) => discrepancyText(t, r), { id: "message", header: t.cols.explanation }),
+  ]);
 
 type Props = { sessionId: string; onExpired: () => void };
 
 export function ResultsPage({ sessionId, onExpired }: Props) {
+  const t = useT();
+  const columns = useMemo(
+    () => ({ sap: sapColumns(t), physical: physicalColumns(t), discrepancies: discrepancyColumns(t) }),
+    [t],
+  );
   const qc = useQueryClient();
   const key = ["result", sessionId];
   const result = useQuery({
@@ -113,7 +126,7 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
     const expired = result.error instanceof ApiError && result.error.status === 404;
     return (
       <div role="alert" className="space-y-2">
-        <p>{expired ? t.results.expired : result.error.message}</p>
+        <p>{expired ? t.results.expired : errorText(t, result.error)}</p>
         {expired && (
           <button type="button" className="btn-primary" onClick={onExpired}>
             {t.nav.upload}
@@ -140,16 +153,16 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
       {data.warnings.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
           <p className="font-medium">{t.results.warnings}</p>
-          <ul className="list-disc pl-5">{data.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+          <ul className="list-disc pl-5">{data.warnings.map((w, i) => <li key={i}>{noteText(t, w)}</li>)}</ul>
         </div>
       )}
       {tieError && (
         <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">
-          {tieError.message}
+          {errorText(t, tieError)}
         </p>
       )}
 
-      <div role="tablist" aria-label="Result views" className="flex gap-1 border-b border-slate-200">
+      <div role="tablist" aria-label={t.results.tabs.label} className="flex gap-1 border-b border-slate-200">
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -175,9 +188,10 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
           <DataTable
             label={t.results.tabs.sap}
             data={data.sap_rows}
-            columns={sapColumns}
+            columns={columns.sap}
             getRowId={(r) => String(r.excel_row)}
             statusOf={(r) => r.match_status}
+            statusLabel={(s) => t.status[s as keyof Messages["status"]] ?? s}
             selectedId={selected?.sap != null ? String(selected.sap) : null}
             onRowClick={(r) => setSelected({ sap: r.excel_row, physical: r.matched_physical_row ?? null })}
           />
@@ -186,9 +200,10 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
           <DataTable
             label={t.results.tabs.physical}
             data={data.physical_rows}
-            columns={physicalColumns}
+            columns={columns.physical}
             getRowId={(r) => String(r.excel_row)}
             statusOf={(r) => r.match_status}
+            statusLabel={(s) => t.status[s as keyof Messages["status"]] ?? s}
             selectedId={selected?.physical != null ? String(selected.physical) : null}
             onRowClick={(r) => setSelected({ sap: r.matched_sap_row ?? null, physical: r.excel_row })}
           />
@@ -197,9 +212,10 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
           <DataTable
             label={t.results.tabs.discrepancies}
             data={discrepancies}
-            columns={discrepancyColumns}
+            columns={columns.discrepancies}
             getRowId={(r) => r.id}
             statusOf={(r) => r.kind}
+            statusLabel={(s) => t.issue[s as keyof Messages["issue"]] ?? s}
             onRowClick={(r) => setSelected({ sap: r.sap_row ?? null, physical: r.physical_row ?? null })}
           />
         )}

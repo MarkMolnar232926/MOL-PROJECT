@@ -10,6 +10,7 @@ import pandas as pd
 
 from .config import AppConfig, default_config
 from .loader import EXCEL_ROW, LoadedInput, SheetData
+from .messages import Note, note
 
 WIDTH_RE = re.compile(r"(\d+)\s*cm\s+wide", re.IGNORECASE)
 SIZE_RE = re.compile(r"\b(small|large)\b", re.IGNORECASE)
@@ -31,8 +32,15 @@ class Issue:
 
     source: str
     excel_row: int | None
-    code: str
-    message: str
+    note: Note
+
+    @property
+    def code(self) -> str:
+        return self.note.code
+
+    @property
+    def message(self) -> str:
+        return self.note.text
 
 
 @dataclass
@@ -151,34 +159,26 @@ def normalize_physical(sheet: SheetData, cfg: AppConfig) -> tuple[pd.DataFrame, 
         asset_id = normalize_asset_id(get("asset_id"))
 
         if city and building is None:
-            issues.append(
-                Issue(
-                    "physical",
-                    excel_row,
-                    "unknown_city",
-                    f"City '{city}' is not in the location mapping.",
-                )
-            )
+            issues.append(Issue("physical", excel_row, note("unknown_city", city=city)))
         if building and site_building and building != site_building:
             issues.append(
                 Issue(
                     "physical",
                     excel_row,
-                    "site_city_conflict",
-                    f"Site code {site_code} does not belong to city '{city}'.",
+                    note("site_city_conflict", site_code=site_code, city=city),
                 )
             )
         if activation is None:
+            raw = get("activation_date")
             issues.append(
                 Issue(
                     "physical",
                     excel_row,
-                    "bad_activation_date",
-                    f"Activation date '{get('activation_date')}' could not be read.",
+                    note("bad_activation_date", value=None if raw is None else str(raw)),
                 )
             )
         if asset_id is None:
-            issues.append(Issue("physical", excel_row, "missing_asset_id", "Asset ID is empty."))
+            issues.append(Issue("physical", excel_row, note("missing_asset_id")))
 
         records.append(
             {
@@ -216,29 +216,11 @@ def normalize_sap(sheet: SheetData, cfg: AppConfig) -> tuple[pd.DataFrame, list[
         item_name = clean_str(get("item_name"))
 
         if building and building not in building_to_city:
-            issues.append(
-                Issue(
-                    "sap",
-                    excel_row,
-                    "unknown_building",
-                    f"Building '{building}' is not in the location mapping.",
-                )
-            )
+            issues.append(Issue("sap", excel_row, note("unknown_building", building=building)))
         if serial_year(serial) is None:
-            issues.append(
-                Issue(
-                    "sap", excel_row, "bad_serial", f"Serial No. '{serial}' has no SN-YYYY- year."
-                )
-            )
+            issues.append(Issue("sap", excel_row, note("bad_serial", serial=serial)))
         if width is None and get("width_cm") is not None:
-            issues.append(
-                Issue(
-                    "sap",
-                    excel_row,
-                    "bad_width",
-                    f"Width '{get('width_cm')}' is not a whole number.",
-                )
-            )
+            issues.append(Issue("sap", excel_row, note("bad_width", value=str(get("width_cm")))))
 
         records.append(
             {

@@ -13,7 +13,7 @@ async function uploadFixture(page: Page) {
   await expect(page.getByText("Detected sheets")).toBeVisible();
   await expect(page.getByText(/Physical_Inventory \(by sheet name\), 84 rows/)).toBeVisible();
   await page.getByRole("button", { name: "View results" }).click();
-  await expect(page.getByTestId("kpi-Needs decision")).toHaveText("17");
+  await expect(page.getByTestId("kpi-needs-decision")).toHaveText("17");
 }
 
 test("upload, accept all tie suggestions, export", async ({ page }) => {
@@ -27,7 +27,7 @@ test("upload, accept all tie suggestions, export", async ({ page }) => {
   await expect(dialog).toContainText("all 17 undecided slots");
   await dialog.getByRole("button", { name: "Accept all suggestions" }).click();
   await expect(page.getByTestId("ties-remaining")).toHaveText("0 of 17 slots need a decision");
-  await expect(page.getByTestId("kpi-Needs decision")).toHaveText("0");
+  await expect(page.getByTestId("kpi-needs-decision")).toHaveText("0");
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Excel" }).click(); // nothing pending: no dialog

@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from recon.config import CostWeights, Location, TypeRule
+from recon.messages import Note
 from recon.models import ReconResult, Summary, TieAssignment
 
 
@@ -34,7 +35,7 @@ class DetectedSheet(BaseModel):
 class SessionCreated(BaseModel):
     session_id: str
     detected: list[DetectedSheet]
-    warnings: list[str]
+    warnings: list[Note]
     summary: Summary
 
 

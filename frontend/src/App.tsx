@@ -3,14 +3,36 @@ import { useState } from "react";
 import { api } from "./api/client";
 import { ExportButton } from "./components/ExportButton";
 import { useStoredState } from "./hooks/useStoredState";
-import { t } from "./i18n/en";
+import { LANGUAGES, useLanguage, useT, type Language } from "./i18n";
 import { ResultsPage } from "./pages/ResultsPage";
 import { RulesPage } from "./pages/RulesPage";
 import { UploadPage } from "./pages/UploadPage";
 
 type Page = "upload" | "results" | "rules";
 
+function LanguageSwitcher() {
+  const t = useT();
+  const { language, setLanguage } = useLanguage();
+  return (
+    <label className="flex items-center gap-2 text-sm text-slate-700">
+      <span>{t.languageLabel}</span>
+      <select
+        className="input"
+        value={language}
+        onChange={(e) => setLanguage(e.target.value as Language)}
+      >
+        {(Object.keys(LANGUAGES) as Language[]).map((l) => (
+          <option key={l} value={l} lang={l}>
+            {LANGUAGES[l].languageName}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export default function App() {
+  const t = useT();
   const [sessionId, setSessionId] = useStoredState("recon.sessionId");
   const [page, setPage] = useState<Page>(sessionId ? "results" : "upload");
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, retry: false });
@@ -50,6 +72,7 @@ export default function App() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-3">
+          <LanguageSwitcher />
           <ExportButton sessionId={sessionId} pendingSlots={pending} />
         </div>
       </header>

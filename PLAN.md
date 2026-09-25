@@ -218,7 +218,7 @@ Upload limit 20 MB, only `.xlsx`/`.xlsm`; reject other types clearly. All engine
 - **Ties view (core of the "user picks" decision):** one card per tie group showing the shared attributes (type, colour, width, year, locations) and a small grid: each SAP row (serial, building, remarks, QR) with a dropdown of the candidate physical units (Asset ID, activation date, city, custodian, value). Pre-filled with the suggestion and labelled "suggested"; choosing an ID removes it from the other dropdowns in the group; "Accept suggestion" and "Reset" buttons per group; an "Accept all suggestions" button at the top with a confirmation. Show remaining count ("3 of 11 slots need a decision").
 - **Rules page:** read-only view of type rules, location mapping and cost weights.
 - **Export button** (always visible in the header), with the unresolved-ties dialog from 7.2.
-- UI text in one `src/i18n/en.ts` file so a Dutch translation can be added later. Accessible (keyboard-navigable dropdowns, labelled controls). Works on a laptop screen; mobile is not a goal.
+- UI text in one file per language (`src/i18n/en.ts`, `src/i18n/hu.ts`); a language picker in the header switches between English and Hungarian (**[DECISION]**, after phase 5). Server messages are sent as a code + parameters (`backend/recon/messages.py`) so the web app can translate them; the Excel export stays English. Accessible (keyboard-navigable dropdowns, labelled controls). Works on a laptop screen; mobile is not a goal.
 
 ---
 
