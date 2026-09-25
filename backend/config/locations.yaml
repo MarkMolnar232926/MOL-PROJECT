@@ -1,0 +1,3 @@
+# One entry per location. City (physical) <-> Building (SAP) <-> Site code (physical).
+- {city: Riverside, building: RVS, site_code: "4021"}
+- {city: Lakeside,  building: LKS, site_code: "4087"}

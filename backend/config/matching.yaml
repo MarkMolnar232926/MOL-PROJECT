@@ -1,0 +1,15 @@
+# Matching settings (used from phase 2 on).
+
+# Physical rows with one of these statuses are excluded from matching (case-insensitive).
+excluded_statuses: ["Defective - pending write-off"]
+
+# Assignment cost weights (section 6.5 of PLAN.md).
+cost_weights:
+  year_gap: 1000          # per year between activation year and serial year
+  location_mismatch: 100  # City != Building
+  fifo_rank: 0.001        # * (rank_P - rank_S)^2, deterministic FIFO within ties
+
+# QR assessment thresholds for the "QR codes look reliable" hint.
+qr_hint:
+  min_coverage: 0.90
+  min_agreement: 0.95

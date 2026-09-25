@@ -1,0 +1,30 @@
+# Classify a physical row into a SAP "Item Name".
+# First matching rule wins. Keyword = case-insensitive substring of Description;
+# an empty keyword matches any description.
+version: "1"
+rules:
+  - {item: sofa,      keyword: "2-seater",                   sap_type: Sofa}
+  - {item: sofa,      keyword: "sofa bed",                   sap_type: Sofa Bed}
+  - {item: cabinet,   keyword: "single lockable",            sap_type: Lockable Cabinet}
+  - {item: cabinet,   keyword: "hanging rail",               sap_type: Wardrobe}
+  - {item: cabinet,   keyword: "sliding doors",              sap_type: Large Storage Cabinet}
+  - {item: cabinet,   keyword: "shoe",                       sap_type: Shoe Cabinet}
+  - {item: cabinet,   keyword: "4 drawers",                  sap_type: Filing Cabinet}
+  - {item: table,     keyword: "break-room",                 sap_type: Dining Table}
+  - {item: table,     keyword: "monitor shelf",              sap_type: Computer Desk}
+  - {item: table,     keyword: "office desk with 4 drawers", sap_type: Work Desk}
+  - {item: table,     keyword: "meeting table",              sap_type: Conference Table}
+  - {item: table,     keyword: "single drawer",              sap_type: Writing Desk}
+  - {item: table,     keyword: "glass top",                  sap_type: Coffee Table}
+  - {item: stool,     keyword: "footstool",                  sap_type: Footstool}
+  - {item: chair,     keyword: "4-leg",                      sap_type: Guest Chair}
+  - {item: chair,     keyword: "on wheels",                  sap_type: Swivel Chair}
+  - {item: chair,     keyword: "stackable",                  sap_type: Conference Chair}
+  - {item: chair,     keyword: "leather",                    sap_type: Executive Chair}
+  - {item: shelf,     keyword: "closed-back",                sap_type: Bookcase}
+  - {item: shelf,     keyword: "wall shelf",                 sap_type: Shelf Unit}
+  - {item: armchair,  keyword: "",                           sap_type: Armchair}
+  - {item: bin,       keyword: "",                           sap_type: Trash Bin}
+  - {item: coat rack, keyword: "",                           sap_type: Coat Rack}
+  - {item: screen,    keyword: "",                           sap_type: Partition Screen}
+  - {item: counter,   keyword: "",                           sap_type: Reception Desk}
