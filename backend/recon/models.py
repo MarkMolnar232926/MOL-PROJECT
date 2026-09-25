@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class MatchStatus(StrEnum):
@@ -142,6 +142,7 @@ class TieGroup(BaseModel):
     slots: list[TieSlot]
     proposed_pairs: list[TieAssignment]  # the deterministic FIFO suggestion
 
+    @computed_field
     @property
     def pending_slots(self) -> int:
         return sum(not s.decided for s in self.slots)
@@ -178,18 +179,22 @@ class QrAssessment(BaseModel):
     def _pct(n: int, d: int) -> float | None:
         return round(100 * n / d, 1) if d else None
 
+    @computed_field
     @property
     def parseable_pct(self) -> float | None:
         return self._pct(self.parseable, self.total_rows)
 
+    @computed_field
     @property
     def present_pct(self) -> float | None:
         return self._pct(self.present_in_physical, self.total_rows)
 
+    @computed_field
     @property
     def agreement_pct(self) -> float | None:
         return self._pct(self.agreeing, self.compared)
 
+    @computed_field
     @property
     def agreement_outside_ties_pct(self) -> float | None:
         return self._pct(self.agreeing_outside_ties, self.compared_outside_ties)

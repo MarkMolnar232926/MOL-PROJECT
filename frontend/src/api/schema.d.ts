@@ -38,10 +38,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload one workbook, or physical + SAP files, and run matching (QR off) */
+        post: operations["create_session_api_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Result */
+        get: operations["get_result_api_sessions__session_id__result_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/rematch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rematch
+         * @description Re-run matching; manual decisions are kept where still valid, dropped with a
+         *     warning otherwise.
+         */
+        post: operations["rematch_api_sessions__session_id__rematch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/ties/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Decide Tie */
+        put: operations["decide_tie_api_sessions__session_id__ties__group_id__put"];
+        post?: never;
+        /**
+         * Reset Tie
+         * @description Forget the decisions for this group; its slots go back to the suggestion.
+         */
+        delete: operations["reset_tie_api_sessions__session_id__ties__group_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export */
+        get: operations["export_api_sessions__session_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Session */
+        delete: operations["delete_session_api_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_create_session_api_sessions_post */
+        Body_create_session_api_sessions_post: {
+            /**
+             * Workbook
+             * @description One workbook with both sheets
+             */
+            workbook?: string | null;
+            /**
+             * Physical
+             * @description Physical_Inventory file
+             */
+            physical?: string | null;
+            /**
+             * Sap
+             * @description SAP_Export file
+             */
+            sap?: string | null;
+        };
+        /**
+         * Confidence
+         * @enum {string}
+         */
+        Confidence: "High" | "High (QR)" | "Medium" | "Manual" | "Needs decision";
         /** ConfigResponse */
         ConfigResponse: {
             /** Rules Version */
@@ -72,6 +205,62 @@ export interface components {
              */
             fifo_rank: number;
         };
+        /** DetectedSheet */
+        DetectedSheet: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "physical" | "sap";
+            /** File Name */
+            file_name: string;
+            /** Sheet Name */
+            sheet_name: string;
+            /**
+             * Detected By
+             * @enum {string}
+             */
+            detected_by: "sheet_name" | "header_signature";
+            /** Row Count */
+            row_count: number;
+            /** Missing Optional Columns */
+            missing_optional_columns: string[];
+        };
+        /** Discrepancy */
+        Discrepancy: {
+            kind: components["schemas"]["DiscrepancyKind"];
+            /** Physical Row */
+            physical_row?: number | null;
+            /** Sap Row */
+            sap_row?: number | null;
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Message */
+            message: string;
+        };
+        /**
+         * DiscrepancyKind
+         * @enum {string}
+         */
+        DiscrepancyKind: "Physical only" | "SAP only" | "Duplicate" | "Location mismatch" | "Unclassified" | "Unresolved tie" | "Deactivated warning" | "QR disagreement" | "Year gap" | "Data quality";
+        /** ErrorBody */
+        ErrorBody: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Details
+             * @default []
+             */
+            details: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorBody"];
+        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
@@ -85,6 +274,321 @@ export interface components {
             building: string;
             /** Site Code */
             site_code: string;
+        };
+        /** ManualDecision */
+        ManualDecision: {
+            /** Group Id */
+            group_id: string;
+            /** Sap Row */
+            sap_row: number;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Proposed Asset Id */
+            proposed_asset_id: string | null;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
+        /**
+         * MatchStatus
+         * @enum {string}
+         */
+        MatchStatus: "Matched" | "Matched – location mismatch" | "Needs decision" | "Manually resolved" | "Physical only" | "SAP only" | "Defective – excluded" | "Duplicate entry" | "Unclassified";
+        /**
+         * Pair
+         * @description A physical↔SAP pairing, including provisional tie suggestions.
+         */
+        Pair: {
+            /** Sap Row */
+            sap_row: number;
+            /** Physical Row */
+            physical_row: number;
+            /** Asset Id */
+            asset_id: string;
+            confidence: components["schemas"]["Confidence"];
+            /** Location Mismatch */
+            location_mismatch: boolean;
+            /** Year Gap */
+            year_gap: number | null;
+            /** Tie Group Id */
+            tie_group_id?: string | null;
+            /**
+             * Provisional
+             * @default false
+             */
+            provisional: boolean;
+        };
+        /** PhysicalRow */
+        PhysicalRow: {
+            /** Excel Row */
+            excel_row: number;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Item Name */
+            item_name: string | null;
+            /** Description */
+            description: string | null;
+            /** Color */
+            color: string | null;
+            /** Width Cm */
+            width_cm: number | null;
+            /** Size Word */
+            size_word: string | null;
+            /** City */
+            city: string | null;
+            /** Building */
+            building: string | null;
+            /** Custodian */
+            custodian: string | null;
+            /** Activation Date */
+            activation_date: string | null;
+            /** Deactivation Date */
+            deactivation_date: string | null;
+            /** Gross Value */
+            gross_value: number | null;
+            /** Status */
+            status: string | null;
+            /** Sap Type */
+            sap_type: string | null;
+            match_status: components["schemas"]["MatchStatus"];
+            confidence?: components["schemas"]["Confidence"] | null;
+            /** Matched Sap Row */
+            matched_sap_row?: number | null;
+            /** Tie Group Id */
+            tie_group_id?: string | null;
+            /** Duplicate Of */
+            duplicate_of?: number | null;
+            /** Notes */
+            notes?: string[];
+        };
+        /** QrAssessment */
+        QrAssessment: {
+            /** Column Present */
+            column_present: boolean;
+            /** Total Rows */
+            total_rows: number;
+            /** Parseable */
+            parseable: number;
+            /** Present In Physical */
+            present_in_physical: number;
+            /** Compared */
+            compared: number;
+            /** Agreeing */
+            agreeing: number;
+            /** Compared Outside Ties */
+            compared_outside_ties: number;
+            /** Agreeing Outside Ties */
+            agreeing_outside_ties: number;
+            /** Looks Reliable */
+            looks_reliable: boolean;
+            /** Parseable Pct */
+            readonly parseable_pct: number | null;
+            /** Present Pct */
+            readonly present_pct: number | null;
+            /** Agreement Pct */
+            readonly agreement_pct: number | null;
+            /** Agreement Outside Ties Pct */
+            readonly agreement_outside_ties_pct: number | null;
+        };
+        /** RematchRequest */
+        RematchRequest: {
+            /** Use Qr */
+            use_qr: boolean;
+        };
+        /** SapRow */
+        SapRow: {
+            /** Excel Row */
+            excel_row: number;
+            /** Item Name */
+            item_name: string | null;
+            /** Color */
+            color: string | null;
+            /** Material */
+            material: string | null;
+            /** Width Cm */
+            width_cm: number | null;
+            /** Serial No */
+            serial_no: string | null;
+            /** Serial Year */
+            serial_year: number | null;
+            /** Building */
+            building: string | null;
+            /** City */
+            city: string | null;
+            /** Remarks */
+            remarks: string | null;
+            /** Qr Code */
+            qr_code: string | null;
+            /** Qr Asset Id */
+            qr_asset_id: string | null;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Suggested Asset Id */
+            suggested_asset_id?: string | null;
+            match_status: components["schemas"]["MatchStatus"];
+            confidence?: components["schemas"]["Confidence"] | null;
+            /** Matched Physical Row */
+            matched_physical_row?: number | null;
+            /** Qr Agrees */
+            qr_agrees?: boolean | null;
+            /** Tie Group Id */
+            tie_group_id?: string | null;
+            /** Duplicate Of */
+            duplicate_of?: number | null;
+            /** Notes */
+            notes?: string[];
+        };
+        /** SessionCreated */
+        SessionCreated: {
+            /** Session Id */
+            session_id: string;
+            /** Detected */
+            detected: components["schemas"]["DetectedSheet"][];
+            /** Warnings */
+            warnings: string[];
+            summary: components["schemas"]["Summary"];
+        };
+        /** SessionResult */
+        SessionResult: {
+            summary: components["schemas"]["Summary"];
+            /** Physical Rows */
+            physical_rows: components["schemas"]["PhysicalRow"][];
+            /** Sap Rows */
+            sap_rows: components["schemas"]["SapRow"][];
+            /** Pairs */
+            pairs: components["schemas"]["Pair"][];
+            /** Tie Groups */
+            tie_groups: components["schemas"]["TieGroup"][];
+            /** Discrepancies */
+            discrepancies: components["schemas"]["Discrepancy"][];
+            qr_assessment: components["schemas"]["QrAssessment"];
+            /** Decisions */
+            decisions: components["schemas"]["ManualDecision"][];
+            /** Warnings */
+            warnings: string[];
+            /** Session Id */
+            session_id: string;
+            /** Detected */
+            detected: components["schemas"]["DetectedSheet"][];
+        };
+        /** Summary */
+        Summary: {
+            /** Physical Total */
+            physical_total: number;
+            /** Sap Total */
+            sap_total: number;
+            /** Pairs */
+            pairs: number;
+            /** Physical Status Counts */
+            physical_status_counts: {
+                [key: string]: number;
+            };
+            /** Sap Status Counts */
+            sap_status_counts: {
+                [key: string]: number;
+            };
+            /** Confidence Counts */
+            confidence_counts: {
+                [key: string]: number;
+            };
+            /** Location Mismatches */
+            location_mismatches: number;
+            /** Tie Groups */
+            tie_groups: number;
+            /** Tie Slots */
+            tie_slots: number;
+            /** Tie Slots Pending */
+            tie_slots_pending: number;
+            /** Manual Decisions */
+            manual_decisions: number;
+            /** Use Qr */
+            use_qr: boolean;
+            /** Rules Version */
+            rules_version: string;
+        };
+        /** TieAssignment */
+        TieAssignment: {
+            /** Sap Row */
+            sap_row: number;
+            /** Physical Asset Id */
+            physical_asset_id: string | null;
+        };
+        /** TieCandidate */
+        TieCandidate: {
+            /** Physical Row */
+            physical_row: number;
+            /** Asset Id */
+            asset_id: string;
+            /** Activation Date */
+            activation_date: string | null;
+            /** City */
+            city: string | null;
+            /** Building */
+            building: string | null;
+            /** Custodian */
+            custodian: string | null;
+            /** Gross Value */
+            gross_value: number | null;
+        };
+        /** TieDecisionRequest */
+        TieDecisionRequest: {
+            /**
+             * Assignments
+             * @description One entry per SAP row to decide; physical_asset_id null = leave unmatched.
+             */
+            assignments: components["schemas"]["TieAssignment"][];
+        };
+        /** TieGroup */
+        TieGroup: {
+            /** Group Id */
+            group_id: string;
+            /** Sap Type */
+            sap_type: string;
+            /** Color */
+            color: string | null;
+            /** Width Cm */
+            width_cm: number | null;
+            /** Year */
+            year: number | null;
+            /** Locations */
+            locations: string[];
+            /** Physical Rows */
+            physical_rows: number[];
+            /** Sap Rows */
+            sap_rows: number[];
+            /** Candidates */
+            candidates: components["schemas"]["TieCandidate"][];
+            /** Slots */
+            slots: components["schemas"]["TieSlot"][];
+            /** Proposed Pairs */
+            proposed_pairs: components["schemas"]["TieAssignment"][];
+            /** Pending Slots */
+            readonly pending_slots: number;
+        };
+        /** TieSlot */
+        TieSlot: {
+            /** Sap Row */
+            sap_row: number;
+            /** Serial No */
+            serial_no: string | null;
+            /** Building */
+            building: string | null;
+            /** Remarks */
+            remarks: string | null;
+            /** Qr Code */
+            qr_code: string | null;
+            /** Suggested Asset Id */
+            suggested_asset_id: string | null;
+            /** Chosen Asset Id */
+            chosen_asset_id?: string | null;
+            /**
+             * Decided
+             * @default false
+             */
+            decided: boolean;
+            confidence: components["schemas"]["Confidence"];
         };
         /** TypeRule */
         TypeRule: {
@@ -143,6 +647,305 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigResponse"];
+                };
+            };
+        };
+    };
+    create_session_api_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_session_api_sessions_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionCreated"];
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description File too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_result_api_sessions__session_id__result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResult"];
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rematch_api_sessions__session_id__rematch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RematchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResult"];
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    decide_tie_api_sessions__session_id__ties__group_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TieDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TieGroup"];
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_tie_api_sessions__session_id__ties__group_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TieGroup"];
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    export_api_sessions__session_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reconciled workbook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_session_api_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown session or tie group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

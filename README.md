@@ -12,8 +12,8 @@ and phase plan.
 | 1 | Scaffold, loading, header validation, normalisation | done |
 | 2 | Matching engine + golden tests | done |
 | 3 | Excel export | done |
-| 4 | REST API + sessions | next |
-| 5 | React UI | – |
+| 4 | REST API + sessions | done |
+| 5 | React UI | next |
 
 ## Layout
 
@@ -68,6 +68,29 @@ Upload either one workbook containing both sheets, or two files. Each source is 
 sheet name first (`Physical_Inventory` / `SAP_Export`), then by header signature (a sheet that
 has all required columns of that source). With two files, a swapped upload is still detected
 and reported as a warning.
+
+## REST API
+
+Interactive docs at http://localhost:8000/docs while `make api` (or `make dev`) runs.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/sessions` | multipart upload: `workbook`, or `physical` + `sap`; runs matching (QR off) |
+| `GET /api/sessions/{id}/result` | full result: summary, rows, pairs, tie groups, discrepancies, QR assessment |
+| `POST /api/sessions/{id}/rematch` | `{"use_qr": true}`; manual decisions kept where still valid |
+| `PUT /api/sessions/{id}/ties/{group_id}` | `{"assignments": [{"sap_row": 2, "physical_asset_id": "84247161"}]}` (`null` = leave unmatched) |
+| `DELETE /api/sessions/{id}/ties/{group_id}` | reset a tie group to the suggestion |
+| `GET /api/sessions/{id}/export` | download `reconciled_<timestamp>.xlsx` |
+| `DELETE /api/sessions/{id}` | discard a session |
+| `GET /api/config`, `GET /api/health` | rules/locations/weights; liveness |
+
+Sessions live in memory and expire after 2 h without access (`api/sessions.py`; swap
+`InMemorySessionStore` for another `SessionStore` to host it). Uploads are limited to 20 MB,
+`.xlsx`/`.xlsm` only. Errors are JSON: `{"error": {"code", "message", "details"}}`.
+
+```bash
+curl -F workbook=@tests/fixtures/Inventory_Reconciliation_Practice_1.xlsx localhost:8000/api/sessions
+```
 
 ## API types
 
