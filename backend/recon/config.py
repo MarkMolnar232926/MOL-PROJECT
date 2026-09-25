@@ -74,15 +74,9 @@ class CostWeights(BaseModel):
     fifo_rank: float = 0.001
 
 
-class QrHint(BaseModel):
-    min_coverage: float = 0.90
-    min_agreement: float = 0.95
-
-
 class MatchingConfig(BaseModel):
     excluded_statuses: list[str] = ["Defective - pending write-off"]
     cost_weights: CostWeights = CostWeights()
-    qr_hint: QrHint = QrHint()
 
 
 class AppConfig(BaseModel):

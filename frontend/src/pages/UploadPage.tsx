@@ -2,16 +2,17 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError, type SessionCreated, type UploadInput } from "../api/client";
 import { DropZone } from "../components/DropZone";
-import { t } from "../i18n/en";
+import { errorText, noteText, useT } from "../i18n";
 
 type Props = { onUploaded: (created: SessionCreated) => void; onViewResults: () => void };
 
 function ErrorPanel({ error }: { error: ApiError }) {
+  const t = useT();
   const missing = error.details.filter((d) => Array.isArray(d.missing_columns));
   return (
     <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
       <p className="font-semibold">{t.upload.errorTitle}</p>
-      <p className="mt-1">{error.message}</p>
+      <p className="mt-1">{errorText(t, error)}</p>
       {missing.length > 0 && (
         <ul className="mt-2 list-disc pl-5">
           {missing.map((d) => (
@@ -29,6 +30,7 @@ function ErrorPanel({ error }: { error: ApiError }) {
 }
 
 export function UploadPage({ onUploaded, onViewResults }: Props) {
+  const t = useT();
   const [mode, setMode] = useState<"one" | "two">("one");
   const [workbook, setWorkbook] = useState<File | null>(null);
   const [physical, setPhysical] = useState<File | null>(null);
@@ -100,7 +102,7 @@ export function UploadPage({ onUploaded, onViewResults }: Props) {
           {created.warnings.length > 0 && (
             <div className="mt-2">
               <p className="font-medium">{t.upload.warnings}</p>
-              <ul className="list-disc pl-5">{created.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+              <ul className="list-disc pl-5">{created.warnings.map((w, i) => <li key={i}>{noteText(t, w)}</li>)}</ul>
             </div>
           )}
           <button type="button" className="btn-primary mt-3" onClick={onViewResults}>

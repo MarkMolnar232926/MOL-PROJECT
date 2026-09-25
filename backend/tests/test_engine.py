@@ -211,77 +211,37 @@ def test_year_gap_flag():
     assert DiscrepancyKind.YEAR_GAP in kinds(res)
 
 
-# --- QR ---------------------------------------------------------------------------------------
+# --- QR codes ---------------------------------------------------------------------------------
 
 
-def _two_chairs(qr_a, qr_b, drop=()):
-    return make_input(
+def test_qr_codes_never_influence_matching():
+    """Even a QR code that looks exactly like an Asset ID is only a label."""
+    data = make_input(
         [
             phys(11111111, "chair", "on wheels, black", date=(2019, 5, 1)),
             phys(22222222, "chair", "on wheels, black", date=(2019, 2, 1)),
         ],
         [
-            sap("Swivel Chair", "Black", 60, "SN-2019-9000", qr=qr_a),
-            sap("Swivel Chair", "Black", 60, "SN-2019-1000", qr=qr_b),
-        ],
-        drop_sap=drop,
-    )
-
-
-@pytest.mark.parametrize(
-    ("qr_a", "qr_b", "drop", "present", "parseable"),
-    [
-        (None, None, ("QR Code",), False, 0),
-        (None, None, (), True, 0),
-        ("garbage", "INV12", (), True, 0),
-        ("INV0022222222", None, (), True, 1),
-    ],
-)
-def test_qr_edge_cases_never_fail(qr_a, qr_b, drop, present, parseable):
-    data = _two_chairs(qr_a, qr_b, drop)
-    for use_qr in (False, True):
-        res = reconcile(data, use_qr=use_qr)
-        assert res.qr_assessment.column_present is present
-        assert res.qr_assessment.parseable == parseable
-        assert not res.qr_assessment.looks_reliable or parseable == 2
-
-
-def test_qr_on_resolves_tie_slots():
-    data = _two_chairs("INV0011111111", None)
-    res = reconcile(data, use_qr=True)
-    assert res.summary.tie_groups == 0
-    sap_rows = by_sap(res)
-    assert sap_rows[2].asset_id == "11111111"
-    assert sap_rows[2].confidence is Confidence.HIGH_QR
-    assert sap_rows[3].asset_id == "22222222"
-
-
-def test_qr_missing_asset_stays_sap_only():
-    data = make_input(
-        [phys(11111111, "bin", "bin, grey")],
-        [sap("Trash Bin", "Grey", 30, "SN-2020-1", qr="INV0099999999")],
-    )
-    res = reconcile(data, use_qr=True)
-    row = res.sap_rows[0]
-    assert row.match_status is MatchStatus.SAP_ONLY and row.asset_id is None
-    assert "QR references missing asset 99999999" in row.notes[0]
-    assert res.physical_rows[0].match_status is MatchStatus.PHYSICAL_ONLY
-
-
-def test_qr_off_reports_disagreement():
-    data = make_input(
-        [
-            phys(11111111, "bin", "bin, grey", date=(2019, 1, 1)),
-            phys(22222222, "bin", "bin, grey", date=(2020, 1, 1)),
-        ],
-        [
-            sap("Trash Bin", "Grey", 30, "SN-2019-1", qr="INV0022222222"),
-            sap("Trash Bin", "Grey", 30, "SN-2020-1", qr="INV0022222222"),
+            sap("Swivel Chair", "Black", 60, "SN-2019-9000", qr="INV0022222222"),
+            sap("Swivel Chair", "Black", 60, "SN-2019-1000", qr="INV0011111111"),
         ],
     )
     res = reconcile(data)
-    assert [r.qr_agrees for r in res.sap_rows] == [False, True]
-    assert DiscrepancyKind.QR_DISAGREEMENT in kinds(res)
+    (g,) = res.tie_groups  # still a genuine tie
+    # FIFO suggestion (oldest unit <-> lowest serial), regardless of what the QR codes say
+    assert {s.sap_row: s.suggested_asset_id for s in g.slots} == {3: "22222222", 2: "11111111"}
+    assert {s.sap_row: s.qr_code for s in g.slots} == {2: "INV0022222222", 3: "INV0011111111"}
+    assert not any("QR" in n.text for r in res.sap_rows for n in r.notes)
+
+
+def test_missing_qr_column_is_fine():
+    data = make_input(
+        [phys(1, "bin", "bin, grey")],
+        [sap("Trash Bin", "Grey", 30, "SN-2020-1")],
+        drop_sap=("QR Code",),
+    )
+    res = reconcile(data)
+    assert res.sap_rows[0].qr_code is None and res.pairs[0].asset_id == "1"
 
 
 # --- tie decisions --------------------------------------------------------------------------
@@ -357,14 +317,53 @@ def test_decision_none_leaves_rows_unmatched():
     assert len(res.pairs) == 2
 
 
-def test_decisions_survive_rematch_or_are_dropped_with_warning():
+def test_decisions_survive_rerun_or_are_dropped_with_warning():
     data = _three_desks()
     (g,) = reconcile(data).tie_groups
     decisions = [decide(g, 2, "2")]
     again = reconcile(data, decisions=decisions)
     assert again.decisions == decisions and again.warnings == []
-    with_qr = reconcile(data, use_qr=True, decisions=decisions)  # QR resolves every slot
-    assert with_qr.decisions == []
-    assert any("row 2" in w for w in with_qr.warnings)
+    stale = reconcile(data, decisions=[decide(g, 99, "1")])  # row 99 is not a tie slot
+    assert stale.decisions == []
+    assert [w.code for w in stale.warnings] == ["decision_stale"]
+    assert "row 99" in stale.warnings[0].text
     invalid = reconcile(data, decisions=[decide(g, 2, "99")])
-    assert invalid.decisions == [] and invalid.warnings
+    assert invalid.decisions == []
+    assert [w.code for w in invalid.warnings] == ["decision_invalid"]
+
+
+# --- messages -------------------------------------------------------------------------------
+
+
+def test_every_message_has_a_code_params_and_english_text():
+    from recon.messages import EN
+
+    data = make_input(
+        [phys(1, "bin", "bin, grey", deact=(2024, 1, 1)), phys(2, "lamp", "desk lamp, red")],
+        [sap("Trash Bin", "Grey", 30, "SN-2021-1", "LKS"), sap("Safe", "Grey", 50, "SN-2020-1")],
+    )
+    res = reconcile(data)
+    notes = [n for r in [*res.sap_rows, *res.physical_rows] for n in r.notes]
+    assert notes and all(n.code in EN and n.text == EN[n.code](n.params) for n in notes)
+    assert all(d.code in EN and d.message == EN[d.code](d.params) for d in res.discrepancies)
+    mismatch = next(d for d in res.discrepancies if d.kind is DiscrepancyKind.LOCATION_MISMATCH)
+    assert mismatch.code == "location_mismatch"
+    assert mismatch.params == {"city": "Riverside", "building": "LKS"}
+    assert {d.code for d in res.discrepancies} >= {"deactivated", "sap_only", "unclassified"}
+
+
+def test_web_app_translates_every_message_code():
+    """Each server message code needs a text in every web-app language."""
+    import re
+
+    from conftest import REPO_ROOT
+
+    from recon.messages import EN
+
+    for lang in ("en", "hu"):
+        source = (REPO_ROOT / "frontend" / "src" / "i18n" / f"{lang}.ts").read_text("utf-8")
+        start = source.index("  messages: {")
+        end = re.compile(r"^  \}", re.MULTILINE).search(source, start).start()
+        block = source[start:end]
+        keys = set(re.findall(r"^    ([a-z_]+): ", block, re.MULTILINE))
+        assert keys == set(EN), (lang, set(EN) ^ keys)

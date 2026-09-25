@@ -54,7 +54,7 @@ def test_two_files_swapped_are_detected_with_warning(physical_sheet, sap_sheet):
     loaded = load_inputs([InputFile("s.xlsx", sap, "physical"), InputFile("p.xlsx", phys, "sap")])
     assert loaded.physical.file_name == "p.xlsx"
     assert loaded.sap.file_name == "s.xlsx"
-    assert len(loaded.warnings) == 2
+    assert [w.code for w in loaded.warnings] == ["files_swapped", "files_swapped"]
 
 
 def test_missing_required_columns_are_listed(physical_sheet, sap_sheet):

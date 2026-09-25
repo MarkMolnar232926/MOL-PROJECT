@@ -9,7 +9,6 @@ from recon.normalize import (
     parse_date,
     parse_description,
     parse_int,
-    parse_qr,
     serial_year,
 )
 
@@ -37,23 +36,6 @@ def test_serial_year():
     assert serial_year(" sn-2025-0001 ") == 2025
     assert serial_year("2019-3032") is None
     assert serial_year(None) is None
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("INV0084219511", "84219511"),
-        ("inv0084219511 ", "84219511"),
-        ("INV0184219511", None),
-        ("INV008421951", None),
-        ("garbage", None),
-        ("", None),
-        (None, None),
-        (84219511, None),
-    ],
-)
-def test_parse_qr(value, expected):
-    assert parse_qr(value) == expected
 
 
 def test_asset_id_and_int_parsing():
@@ -97,7 +79,7 @@ def test_normalize_synthetic(combined_workbook):
     assert s["item_name"].tolist() == ["Swivel Chair", "Work Desk", "Trash Bin"]
     assert s["color"].tolist() == ["black", "oak", "grey"]
     assert s["serial_year"].tolist() == [2019, 2021, 2025]
-    assert s["qr_asset_id"].tolist() == ["84219511", "84200001", None]
+    assert s["qr_code"].tolist() == ["INV0084219511", "INV0084200001", "garbage"]
     assert s["city"].tolist() == ["Riverside", "Lakeside", "Lakeside"]
     assert all(v is None for v in s["asset_id"])
     assert data.issues == []

@@ -57,7 +57,7 @@ export const created: SessionCreated = {
     physical_total: 84, sap_total: 84, pairs: 74,
     physical_status_counts: {}, sap_status_counts: {}, confidence_counts: {},
     location_mismatches: 5, tie_groups: 7, tie_slots: 17, tie_slots_pending: 17,
-    manual_decisions: 0, use_qr: false, rules_version: "1",
+    manual_decisions: 0, rules_version: "1",
   },
 };
 

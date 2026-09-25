@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { TieAssignment, TieGroup } from "../api/client";
-import { t } from "../i18n/en";
+import { useT } from "../i18n";
 import { initialDraft, optionsFor, suggestionAssignments, type TieDraft } from "./tieOptions";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
 const NONE = "";
 
 export function TieGroupCard({ group, busy, onSave, onReset }: Props) {
+  const t = useT();
   // Re-initialise the draft whenever the server's view of the group changes.
   const serverKey = JSON.stringify(group.slots);
   const [draftState, setDraftState] = useState<{ key: string; draft: TieDraft }>({

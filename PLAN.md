@@ -76,7 +76,7 @@ docker-compose.yml  README.md  PLAN.md
 | Width / Height / Depth (cm) | Integers. Width is used for size disambiguation |
 | Serial No. | Format `SN-YYYY-NNNN`. The **year** is used for FIFO. **Serials are not globally unique** (e.g. `SN-2025-3396` appears on a Trash Bin and a Coat Rack) — never use serial alone as a key. |
 | Remarks | Free text, informational |
-| QR Code | Format `INV00` + 8 digits — see **section 6.7, this is critical** |
+| QR Code | Format `INV00` + 8 digits. A label only — **not** an Asset ID, see section 6.7 |
 | Building | `RVS` = Riverside, `LKS` = Lakeside |
 
 The workbook also contains a `Task` sheet (instructions) and a **hidden `Answer_Key` sheet**. The engine must **never read `Answer_Key`** at runtime; it is used only by the test suite.
@@ -160,16 +160,8 @@ In the practice data, 5 tie groups exist (11 assets). The Answer_Key pairs them 
 | Conference Chair | LKS | 2025 | 84264116, 84245414 | SN-2025-4806, SN-2025-3911 |
 | Shelf Unit | RVS/LKS | 2024 | 84287104, 84271689 | SN-2024-8750 (LKS), SN-2024-5113 (RVS) |
 
-### 6.7 QR Code — optional, auto-assessed (it is unknown whether real exports fill it)
-The SAP `QR Code` column (`INV00` + 8 digits) **contains the physical Asset ID** for every row in the practice file (verified: 100% agreement with Answer_Key). Whether real SAP exports populate it reliably is **not known yet**, so the app must handle all cases: column absent, partly empty, malformed, or fully populated.
-
-Always run a **QR assessment** after loading and show it on the results page: % of SAP rows with a parseable QR, % whose ID exists in Physical_Inventory, and % agreement with the fuzzy match (computed with QR off). If coverage ≥ 90 % and agreement ≥ 95 %, show a hint "QR codes look reliable — consider enabling QR matching". Never switch it on automatically.
-
-QR matching is a *default-off* pass controlled by a toggle "Use QR code as direct match" (re-runs matching for the session):
-- **On:** before fuzzy matching, pair SAP rows whose QR-derived ID exists in Physical_Inventory (non-defective, non-duplicate) and whose type/colour are consistent; those become **High (QR)**. The fuzzy engine handles the rest. SAP rows whose QR ID has no physical row remain SAP-only discrepancies (do not write that ID into Asset ID; show it as "QR references missing asset").
-- **Off:** QR is ignored entirely by matching, but after matching, show a **validation column** "QR agrees?" so users see where the fuzzy match and the QR disagree.
-- **QR and ties:** when QR is on, a QR-confirmed pair inside a tie group resolves that slot automatically (confidence **High (QR)**); only the slots still undecided remain **Needs decision**.
-- **Robustness:** a missing QR column, empty cells or malformed values must never raise an error — they simply count as "no QR" in the assessment.
+### 6.7 QR Code — label only (**[DECISION]**, after phase 5)
+The SAP `QR Code` column is **not** an Asset ID. In the practice file its digits happen to equal the physical Asset IDs, but that is a coincidence of the example data. The app therefore never uses QR codes for matching, confidence or validation: there is no QR matching pass, no QR assessment, no "QR agrees?" column and no QR disagreement warning. The column stays optional and is shown as a plain label (SAP rows, tie cards, pair view, exports), because it can help someone find the unit on site. Duplicate QR codes on otherwise different SAP rows are still reported as a data-quality issue.
 
 ### 6.8 Other flags (informational, do not block matching)
 - Physical row has a Deactivation date but is still matched to an active SAP row → warning "Deactivated but present in SAP".
@@ -192,13 +184,13 @@ QR matching is a *default-off* pass controlled by a toggle "Use QR code as direc
 | Duplicate entry | later copy of an identical row (either sheet) |
 | Unclassified | no type rule matched |
 
-Confidence values: `High`, `High (QR)`, `Medium`, `Manual`, `Needs decision`.
+Confidence values: `High`, `Medium`, `Manual`, `Needs decision`.
 
 ### 7.2 Downloadable Excel (`reconciled_<timestamp>.xlsx`)
-1. **SAP_Export_Completed** — the original SAP sheet, same columns and order, with Asset ID filled; plus appended columns `Match status`, `Confidence`, `Matched physical row`, `QR agrees?`, `Notes`. Keep the pale-yellow fill on Asset ID.
+1. **SAP_Export_Completed** — the original SAP sheet, same columns and order, with Asset ID filled; plus appended columns `Match status`, `Confidence`, `Matched physical row`, `Notes`. Keep the pale-yellow fill on Asset ID.
 2. **Physical_Inventory_Annotated** — original columns plus `Match status`, `Matched SAP row`, `SAP Item Name`, `Notes`.
-3. **Discrepancies** — one row per issue (Physical only, SAP only, Duplicate, Location mismatch, Unclassified, Unresolved tie, Deactivated warning, QR disagreement), with row references from both sheets and a plain-English explanation.
-4. **Summary** — counts per status and confidence, QR assessment figures, input file names, timestamp, rule-set version, whether QR matching was on, number of manual decisions.
+3. **Discrepancies** — one row per issue (Physical only, SAP only, Duplicate, Location mismatch, Unclassified, Unresolved tie, Deactivated warning, Year gap, Data quality), with row references from both sheets and a plain-English explanation.
+4. **Summary** — counts per status and confidence, input file names, timestamp, rule-set version, number of manual decisions.
 5. **Decisions_Log** — every manual tie decision: group, SAP row, chosen Asset ID, proposed Asset ID, timestamp.
 
 **Unresolved ties at export:** allow the download, but the UI shows a confirmation dialog ("3 tie slots still need a decision — export anyway?"). Unresolved slots are exported with an **empty** Asset ID and status `Needs decision`, never with the provisional suggestion.
@@ -208,9 +200,8 @@ Use openpyxl, Arial font, frozen header rows, autofilter, sensible column widths
 ### 7.3 REST API (FastAPI, prefix `/api`)
 | Method & path | Purpose |
 |---|---|
-| `POST /sessions` | multipart upload: either `workbook` (one file) or `physical` + `sap` (two files). Returns `session_id`, detected sheets, row counts, validation errors (HTTP 422 with a readable list of missing columns). Runs matching immediately with QR off. |
-| `GET /sessions/{id}/result` | full result: summary, rows for both sheets with statuses, discrepancies, tie groups, QR assessment |
-| `POST /sessions/{id}/rematch` | body `{use_qr: bool}` — reruns matching; manual decisions are **kept** where still valid, dropped with a warning otherwise |
+| `POST /sessions` | multipart upload: either `workbook` (one file) or `physical` + `sap` (two files). Returns `session_id`, detected sheets, row counts, validation errors (HTTP 422 with a readable list of missing columns). Runs matching immediately. |
+| `GET /sessions/{id}/result` | full result: summary, rows for both sheets with statuses, discrepancies, tie groups |
 | `PUT /sessions/{id}/ties/{group_id}` | body `{assignments: [{sap_row, physical_asset_id or null}]}` — server validates one-to-one within the group and that each choice was a candidate; returns the updated group |
 | `DELETE /sessions/{id}/ties/{group_id}` | reset group to the suggestion |
 | `GET /sessions/{id}/export` | streams the Excel file (7.2) |
@@ -223,12 +214,11 @@ Upload limit 20 MB, only `.xlsx`/`.xlsm`; reject other types clearly. All engine
 - **Upload page:** toggle "One workbook / Two files", drag-and-drop zones, then a confirmation panel with detected sheets and row counts, or the validation errors.
 - **Results page:**
   - KPI tiles: matched, location mismatches, **needs decision**, SAP only, physical only, defective excluded, duplicates.
-  - QR panel: assessment figures, the "looks reliable" hint when applicable, and the QR toggle (triggers `/rematch`, shows a spinner).
   - Tabs with sortable/filterable tables (TanStack Table): *All SAP rows*, *All physical rows*, *Discrepancies*, *Ties*. Colour-coded status/confidence badges. Clicking a row shows its matched counterpart side-by-side (all attributes, with differing fields highlighted).
 - **Ties view (core of the "user picks" decision):** one card per tie group showing the shared attributes (type, colour, width, year, locations) and a small grid: each SAP row (serial, building, remarks, QR) with a dropdown of the candidate physical units (Asset ID, activation date, city, custodian, value). Pre-filled with the suggestion and labelled "suggested"; choosing an ID removes it from the other dropdowns in the group; "Accept suggestion" and "Reset" buttons per group; an "Accept all suggestions" button at the top with a confirmation. Show remaining count ("3 of 11 slots need a decision").
 - **Rules page:** read-only view of type rules, location mapping and cost weights.
 - **Export button** (always visible in the header), with the unresolved-ties dialog from 7.2.
-- UI text in one `src/i18n/en.ts` file so a Dutch translation can be added later. Accessible (keyboard-navigable dropdowns, labelled controls). Works on a laptop screen; mobile is not a goal.
+- UI text in one file per language (`src/i18n/en.ts`, `src/i18n/hu.ts`); a language picker in the header switches between English and Hungarian (**[DECISION]**, after phase 5). Server messages are sent as a code + parameters (`backend/recon/messages.py`) so the web app can translate them; the Excel export stays English. Accessible (keyboard-navigable dropdowns, labelled controls). Works on a laptop screen; mobile is not a goal.
 
 ---
 
@@ -236,7 +226,7 @@ Upload limit 20 MB, only `.xlsx`/`.xlsm`; reject other types clearly. All engine
 
 Write `backend/tests/test_practice_file.py` that runs the engine on the fixture and compares to the hidden `Answer_Key` (the only place that sheet is read). The Answer_Key's `SAP_Export row(s)` / `Physical_Inventory row(s)` columns use Excel row numbers (header = row 1).
 
-Required assertions with **QR off**:
+Required assertions:
 - 84 physical rows, 84 SAP rows loaded; 25 rules classify all physical rows.
 - Physical duplicates detected at rows **31, 44, 83**; SAP duplicates at rows **68, 77, 79**.
 - 7 defective excluded: physical rows **42, 43, 45, 51, 57, 79, 82**.
@@ -246,11 +236,11 @@ Required assertions with **QR off**:
 - **[DECISION, phase 2]** Ties follow the attribute-based definition in 6.6, which yields **7 tie groups / 17 SAP slots** with status Needs decision on the practice file: the 5 groups listed in 6.6 (each contained in a detected group) plus Coat Rack 2021 (2 slots), Computer Desk 2024 RVS (2) and two more Shelf Units 2024 (84257423, 84229044) in the Shelf Unit group. The table in 6.6 lists only the slots where FIFO disagrees with the Answer_Key, which the engine cannot know. Suggestions pair only within their group.
 - Totals reconcile: physical 74 + 7 + 3 = 84; SAP 74 + 7 + 3 = 84.
 
-With **QR on**: 74/74 pairs equal the Answer_Key and **0** tie slots remain undecided. QR assessment on the fixture reports 100 % parseable, 91.7 % (77/84) IDs present in Physical_Inventory (the 7 SAP-only rows reference absent assets), and 100 % agreement outside tie groups.
+QR codes are kept on every SAP row and tie slot as labels and never appear in matching notes (6.7).
 
 Also test:
-- Engine units: description parsing, size resolution (`small`/`large` with one vs two widths), duplicate detection, header detection, missing-column errors, QR edge cases (column missing, empty, malformed).
-- Tie resolution: one-to-one enforcement, "none" choice, invalid candidate rejected, decisions surviving a `/rematch`.
+- Engine units: description parsing, size resolution (`small`/`large` with one vs two widths), duplicate detection, header detection, missing-column errors, a missing QR Code column, QR codes never influencing matching.
+- Tie resolution: one-to-one enforcement, "none" choice, invalid candidate rejected, decisions kept on re-run or dropped with a warning.
 - API: every endpoint incl. both upload modes, 422 on bad files, export round-trip (re-read the Excel; Asset IDs in the right rows; unresolved slots empty).
 - Frontend: tie-picker component (options shrink as IDs are chosen), upload flow, export dialog.
 - One Playwright end-to-end test: upload fixture → resolve all ties by accepting suggestions → export → file downloads.
@@ -261,7 +251,7 @@ Also test:
 
 **Phase 1 — Scaffold & data loading.** Repo layout from section 2, pyproject, ruff, pytest, Vite app skeleton, docker-compose, `make dev`. Loaders for one-workbook and two-file input, header validation, normalisation, description parsing. *Checkpoint: print a parsed preview of both sheets; loading/parsing tests green; both dev servers start.*
 
-**Phase 2 — Matching engine.** Duplicates, exclusions, classification, hard constraints, assignment, confidence, tie-group objects, QR assessment + QR pass, flags, manual-decision application. *Checkpoint: golden tests in section 8 pass; show me a console summary of counts, the QR assessment and the tie groups.*
+**Phase 2 — Matching engine.** Duplicates, exclusions, classification, hard constraints, assignment, confidence, tie-group objects, flags, manual-decision application. *Checkpoint: golden tests in section 8 pass; show me a console summary of counts and the tie groups.*
 
 **Phase 3 — Excel export.** The 5-sheet output in 7.2. *Checkpoint: generate the output from the fixture (once with ties unresolved, once with suggestions accepted) and summarise each sheet.*
 

@@ -77,7 +77,6 @@ def test_openapi_lists_endpoints(client):
         "/api/sessions",
         "/api/sessions/{session_id}",
         "/api/sessions/{session_id}/result",
-        "/api/sessions/{session_id}/rematch",
         "/api/sessions/{session_id}/ties/{group_id}",
         "/api/sessions/{session_id}/export",
     }
@@ -95,7 +94,6 @@ def test_upload_one_workbook(session):
         ("sap", "SAP_Export", "sheet_name", 84),
     ]
     assert session["summary"]["pairs"] == 74
-    assert session["summary"]["use_qr"] is False
     assert session["summary"]["tie_slots_pending"] == 17
 
 
@@ -165,19 +163,9 @@ def test_result(client, session):
     assert res["session_id"] == session["session_id"]
     assert len(res["sap_rows"]) == len(res["physical_rows"]) == 84
     assert len(res["tie_groups"]) == 7
-    assert res["qr_assessment"]["present_pct"] == 91.7
-    assert res["qr_assessment"]["looks_reliable"] is True
+    assert "qr_assessment" not in res
+    assert all(r["qr_code"] for r in res["sap_rows"])  # kept as a label
     assert all(g["pending_slots"] == len(g["slots"]) for g in res["tie_groups"])
-
-
-def test_rematch_toggles_qr(client, session):
-    sid = session["session_id"]
-    on = client.post(f"/api/sessions/{sid}/rematch", json={"use_qr": True}).json()
-    assert on["summary"]["use_qr"] is True
-    assert on["summary"]["tie_slots_pending"] == 0
-    off = client.post(f"/api/sessions/{sid}/rematch", json={"use_qr": False}).json()
-    assert off["summary"]["tie_slots_pending"] == 17
-    assert client.post(f"/api/sessions/{sid}/rematch", json={}).status_code == 422
 
 
 def test_delete_session(client, session):
@@ -254,20 +242,6 @@ def test_tie_decision_flow(client):
     r = client.delete(f"/api/sessions/{sid}/ties/{gid}")
     assert r.status_code == 200 and r.json()["pending_slots"] == 2
     assert client.get(f"/api/sessions/{sid}/result").json()["decisions"] == []
-
-
-def test_decisions_survive_rematch(client):
-    sid = upload_two(client, *two_chairs()).json()["session_id"]
-    gid = _group(client, sid)["group_id"]
-    client.put(
-        f"/api/sessions/{sid}/ties/{gid}",
-        json={"assignments": [{"sap_row": 2, "physical_asset_id": "22222222"}]},
-    )
-    same = client.post(f"/api/sessions/{sid}/rematch", json={"use_qr": False}).json()
-    assert len(same["decisions"]) == 1 and same["warnings"] == []
-    qr = client.post(f"/api/sessions/{sid}/rematch", json={"use_qr": True}).json()
-    assert qr["decisions"] == []  # QR resolved the slot: decision dropped with a warning
-    assert any("row 2" in w for w in qr["warnings"])
 
 
 # --- export -------------------------------------------------------------------------------

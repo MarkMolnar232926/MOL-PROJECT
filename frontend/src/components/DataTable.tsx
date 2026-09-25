@@ -14,7 +14,7 @@ import {
   type RowData,
 } from "@tanstack/react-table";
 import { useId, useMemo, useState } from "react";
-import { t } from "../i18n/en";
+import { useT } from "../i18n";
 
 export const tableFeatureSet = tableFeatures({
   rowSortingFeature,
@@ -36,6 +36,7 @@ type Props<T extends RowData> = {
   columns: Columns<T>;
   getRowId: (row: T) => string;
   statusOf?: (row: T) => string;
+  statusLabel?: (status: string) => string;
   onRowClick?: (row: T) => void;
   selectedId?: string | null;
 };
@@ -46,9 +47,11 @@ export function DataTable<T extends RowData>({
   columns,
   getRowId,
   statusOf,
+  statusLabel = (s) => s,
   onRowClick,
   selectedId,
 }: Props<T>) {
+  const t = useT();
   const statusId = useId();
   const [status, setStatus] = useState("");
   const statuses = useMemo(
@@ -93,7 +96,7 @@ export function DataTable<T extends RowData>({
               <option value="">{t.results.allStatuses}</option>
               {statuses.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {statusLabel(s)}
                 </option>
               ))}
             </select>

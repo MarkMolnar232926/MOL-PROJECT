@@ -13,8 +13,9 @@ export type TieGroup = S["TieGroup"];
 export type TieSlot = S["TieSlot"];
 export type TieCandidate = S["TieCandidate"];
 export type TieAssignment = S["TieAssignment"];
-export type QrAssessment = S["QrAssessment"];
 export type Summary = S["Summary"];
+export type Note = S["Note"];
+export type MessageParams = NonNullable<Note["params"]>;
 export type MatchStatus = SapRow["match_status"];
 export type Confidence = NonNullable<SapRow["confidence"]>;
 
@@ -73,8 +74,6 @@ export const api = {
     return request<SessionCreated>("/sessions", { method: "POST", body: form });
   },
   result: (sessionId: string) => request<SessionResult>(`/sessions/${sessionId}/result`),
-  rematch: (sessionId: string, useQr: boolean) =>
-    request<SessionResult>(`/sessions/${sessionId}/rematch`, json("POST", { use_qr: useQr })),
   decideTie: (sessionId: string, groupId: string, assignments: TieAssignment[]) =>
     request<TieGroup>(
       `/sessions/${sessionId}/ties/${encodeURIComponent(groupId)}`,

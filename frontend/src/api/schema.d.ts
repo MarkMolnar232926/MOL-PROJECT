@@ -47,7 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload one workbook, or physical + SAP files, and run matching (QR off) */
+        /** Upload one workbook, or physical + SAP files, and run matching */
         post: operations["create_session_api_sessions_post"];
         delete?: never;
         options?: never;
@@ -66,27 +66,6 @@ export interface paths {
         get: operations["get_result_api_sessions__session_id__result_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sessions/{session_id}/rematch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rematch
-         * @description Re-run matching; manual decisions are kept where still valid, dropped with a
-         *     warning otherwise.
-         */
-        post: operations["rematch_api_sessions__session_id__rematch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -174,7 +153,7 @@ export interface components {
          * Confidence
          * @enum {string}
          */
-        Confidence: "High" | "High (QR)" | "Medium" | "Manual" | "Needs decision";
+        Confidence: "High" | "Medium" | "Manual" | "Needs decision";
         /** ConfigResponse */
         ConfigResponse: {
             /** Rules Version */
@@ -235,6 +214,12 @@ export interface components {
             sap_row?: number | null;
             /** Asset Id */
             asset_id?: string | null;
+            /** Code */
+            code: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | null;
+            };
             /** Message */
             message: string;
         };
@@ -242,7 +227,7 @@ export interface components {
          * DiscrepancyKind
          * @enum {string}
          */
-        DiscrepancyKind: "Physical only" | "SAP only" | "Duplicate" | "Location mismatch" | "Unclassified" | "Unresolved tie" | "Deactivated warning" | "QR disagreement" | "Year gap" | "Data quality";
+        DiscrepancyKind: "Physical only" | "SAP only" | "Duplicate" | "Location mismatch" | "Unclassified" | "Unresolved tie" | "Deactivated warning" | "Year gap" | "Data quality";
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -296,6 +281,20 @@ export interface components {
          * @enum {string}
          */
         MatchStatus: "Matched" | "Matched – location mismatch" | "Needs decision" | "Manually resolved" | "Physical only" | "SAP only" | "Defective – excluded" | "Duplicate entry" | "Unclassified";
+        /**
+         * Note
+         * @description One message: ``code`` + ``params`` for translation, ``text`` in English.
+         */
+        Note: {
+            /** Code */
+            code: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | null;
+            };
+            /** Text */
+            text: string;
+        };
         /**
          * Pair
          * @description A physical↔SAP pairing, including provisional tie suggestions.
@@ -361,41 +360,7 @@ export interface components {
             /** Duplicate Of */
             duplicate_of?: number | null;
             /** Notes */
-            notes?: string[];
-        };
-        /** QrAssessment */
-        QrAssessment: {
-            /** Column Present */
-            column_present: boolean;
-            /** Total Rows */
-            total_rows: number;
-            /** Parseable */
-            parseable: number;
-            /** Present In Physical */
-            present_in_physical: number;
-            /** Compared */
-            compared: number;
-            /** Agreeing */
-            agreeing: number;
-            /** Compared Outside Ties */
-            compared_outside_ties: number;
-            /** Agreeing Outside Ties */
-            agreeing_outside_ties: number;
-            /** Looks Reliable */
-            looks_reliable: boolean;
-            /** Parseable Pct */
-            readonly parseable_pct: number | null;
-            /** Present Pct */
-            readonly present_pct: number | null;
-            /** Agreement Pct */
-            readonly agreement_pct: number | null;
-            /** Agreement Outside Ties Pct */
-            readonly agreement_outside_ties_pct: number | null;
-        };
-        /** RematchRequest */
-        RematchRequest: {
-            /** Use Qr */
-            use_qr: boolean;
+            notes?: components["schemas"]["Note"][];
         };
         /** SapRow */
         SapRow: {
@@ -421,8 +386,6 @@ export interface components {
             remarks: string | null;
             /** Qr Code */
             qr_code: string | null;
-            /** Qr Asset Id */
-            qr_asset_id: string | null;
             /** Asset Id */
             asset_id: string | null;
             /** Suggested Asset Id */
@@ -431,14 +394,12 @@ export interface components {
             confidence?: components["schemas"]["Confidence"] | null;
             /** Matched Physical Row */
             matched_physical_row?: number | null;
-            /** Qr Agrees */
-            qr_agrees?: boolean | null;
             /** Tie Group Id */
             tie_group_id?: string | null;
             /** Duplicate Of */
             duplicate_of?: number | null;
             /** Notes */
-            notes?: string[];
+            notes?: components["schemas"]["Note"][];
         };
         /** SessionCreated */
         SessionCreated: {
@@ -447,7 +408,7 @@ export interface components {
             /** Detected */
             detected: components["schemas"]["DetectedSheet"][];
             /** Warnings */
-            warnings: string[];
+            warnings: components["schemas"]["Note"][];
             summary: components["schemas"]["Summary"];
         };
         /** SessionResult */
@@ -463,11 +424,10 @@ export interface components {
             tie_groups: components["schemas"]["TieGroup"][];
             /** Discrepancies */
             discrepancies: components["schemas"]["Discrepancy"][];
-            qr_assessment: components["schemas"]["QrAssessment"];
             /** Decisions */
             decisions: components["schemas"]["ManualDecision"][];
             /** Warnings */
-            warnings: string[];
+            warnings: components["schemas"]["Note"][];
             /** Session Id */
             session_id: string;
             /** Detected */
@@ -503,8 +463,6 @@ export interface components {
             tie_slots_pending: number;
             /** Manual Decisions */
             manual_decisions: number;
-            /** Use Qr */
-            use_qr: boolean;
             /** Rules Version */
             rules_version: string;
         };
@@ -712,50 +670,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResult"];
-                };
-            };
-            /** @description Unknown session or tie group */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid input */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    rematch_api_sessions__session_id__rematch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RematchRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

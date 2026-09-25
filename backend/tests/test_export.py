@@ -107,9 +107,7 @@ def test_discrepancies_and_summary(practice):
     assert Counter(r[0] for r in rows) == Counter(d.kind.value for d in pending.discrepancies)
     assert all(r[3] is None for r in rows if r[0] == "Unresolved tie")
     s = summary_values(wb)
-    assert s["QR matching"] == "Off"
     assert s["Tie slots still needing a decision"] == 17
-    assert s["QR ID exists in Physical_Inventory"] == "77/84 (91.7 %)"
     assert s["Rule-set version"] == "1"
     assert summary_values(roundtrip(data, accepted))["Manual decisions"] == 17
 
@@ -138,7 +136,7 @@ def test_export_without_qr_column_and_with_none_decision():
     result = reconcile(data, decisions=decisions)
     wb = roundtrip(data, result)
     headers, rows = table(wb["SAP_Export_Completed"])
-    assert "QR Code" not in headers and headers[-5:] == SAP_EXTRA
+    assert "QR Code" not in headers and headers[-len(SAP_EXTRA) :] == SAP_EXTRA
     assert rows[0][0] is None and rows[0][headers.index("Match status")] == "SAP only"
     _, log = table(wb["Decisions_Log"])
     assert log[0][3] == "none (left unmatched)"

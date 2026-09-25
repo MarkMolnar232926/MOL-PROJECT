@@ -1,5 +1,5 @@
 import { useId, useState, type DragEvent } from "react";
-import { t } from "../i18n/en";
+import { useT } from "../i18n";
 
 type Props = {
   label: string;
@@ -9,6 +9,7 @@ type Props = {
 
 /** Drag-and-drop area that is also a normal, keyboard-accessible file input. */
 export function DropZone({ label, file, onFile }: Props) {
+  const t = useT();
   const id = useId();
   const [over, setOver] = useState(false);
 

@@ -1,7 +1,7 @@
 """The matching engine (PLAN.md section 6).
 
-``reconcile()`` is a pure function of the normalised input, the config, the QR toggle and the
-list of manual tie decisions, so a session can simply re-run it after every change.
+``reconcile()`` is a pure function of the normalised input, the config and the list of manual
+tie decisions, so a session can simply re-run it after every change.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from scipy.optimize import linear_sum_assignment
 from .config import AppConfig, TypeRule, default_config
 from .errors import ReconError
 from .loader import EXCEL_ROW, SheetData
+from .messages import Note, note
 from .models import (
     Confidence,
     Discrepancy,
@@ -26,7 +27,6 @@ from .models import (
     MatchStatus,
     Pair,
     PhysicalRow,
-    QrAssessment,
     ReconResult,
     SapRow,
     Summary,
@@ -92,9 +92,6 @@ class _Core:
     """The raw outcome of one matching pass."""
 
     pairs: dict[int, int] = field(default_factory=dict)  # sap_row -> phys_row
-    qr_pairs: set[int] = field(default_factory=set)  # sap rows paired by QR
-    qr_missing: dict[int, str] = field(default_factory=dict)  # sap_row -> referenced absent ID
-    qr_notes: dict[int, str] = field(default_factory=dict)
     ties: list[_Tie] = field(default_factory=list)
     pool_s: dict[str, list[int]] = field(default_factory=dict)  # type -> sap rows in fuzzy pool
     pool_p: dict[str, list[int]] = field(default_factory=dict)
@@ -172,62 +169,22 @@ class _Matcher:
 
     # -- passes --
 
-    def run(self, use_qr: bool) -> _Core:
+    def run(self) -> _Core:
         core = _Core()
-        used_p: set[int] = set()
-        if use_qr:
-            self._qr_pass(core, used_p)
         types = sorted(
             {_norm(p["sap_type"]) for p in self.phys.values() if p["_eligible"]}
             | set(self.sap_by_type)
         )
         for t in types:
             prows = [
-                r
-                for r, p in self.phys.items()
-                if p["_eligible"] and _norm(p["sap_type"]) == t and r not in used_p
+                r for r, p in self.phys.items() if p["_eligible"] and _norm(p["sap_type"]) == t
             ]
-            srows = [
-                r
-                for r in self.sap_by_type.get(t, [])
-                if r not in core.qr_pairs and r not in core.qr_missing
-            ]
+            srows = list(self.sap_by_type.get(t, []))
             core.pool_p[t], core.pool_s[t] = prows, srows
             assigned = self.assign(prows, srows)
             core.pairs.update(assigned)
             core.ties.extend(self._find_ties(t, prows, srows, assigned))
         return core
-
-    def _qr_pass(self, core: _Core, used_p: set[int]) -> None:
-        all_ids = {p["asset_id"] for p in self.phys.values()}
-        by_id: dict[str, list[int]] = defaultdict(list)
-        for r, p in self.phys.items():
-            if p["_eligible"]:
-                by_id[p["asset_id"]].append(r)
-        for sr in sorted(self.sap):
-            s = self.sap[sr]
-            qid = s["qr_asset_id"]
-            if not s["_eligible"] or qid is None:
-                continue
-            if qid not in all_ids:
-                core.qr_missing[sr] = qid
-                continue
-            options = [
-                pr
-                for pr in by_id.get(qid, [])
-                if pr not in used_p
-                and _norm(self.phys[pr]["sap_type"]) == _norm(s["item_name"])
-                and self.phys[pr]["color"] == s["color"]
-            ]
-            if options:
-                core.pairs[sr] = options[0]
-                core.qr_pairs.add(sr)
-                used_p.add(options[0])
-            else:
-                core.qr_notes[sr] = (
-                    f"QR points to asset {qid}, but that unit is excluded, already used or its "
-                    "type/colour disagree; matched on attributes instead."
-                )
 
     def _find_ties(
         self, sap_type: str, prows: list[int], srows: list[int], assigned: dict[int, int]
@@ -320,7 +277,6 @@ def reconcile(
     data: NormalizedInput,
     cfg: AppConfig | None = None,
     *,
-    use_qr: bool = False,
     decisions: list[ManualDecision] | None = None,
 ) -> ReconResult:
     cfg = cfg or default_config()
@@ -329,7 +285,7 @@ def reconcile(
     sap = _records(data.sap)
     excluded = {_norm(s) for s in cfg.matching.excluded_statuses}
     discrepancies: list[Discrepancy] = []
-    warnings: list[str] = list(loaded.warnings)
+    warnings: list[Note] = list(loaded.warnings)
 
     phys_dup = find_duplicates(loaded.physical)
     sap_dup = find_duplicates(loaded.sap)
@@ -343,8 +299,7 @@ def reconcile(
     _data_quality(phys, sap, phys_dup, sap_dup, data, discrepancies)
 
     matcher = _Matcher(phys, sap, cfg)
-    core_off = matcher.run(use_qr=False)
-    core = matcher.run(use_qr=True) if use_qr else core_off
+    core = matcher.run()
 
     groups, kept_decisions = _build_ties(matcher, core, decisions or [], warnings)
     tie_of_sap = {r: g for g in groups for r in g.sap_rows}
@@ -381,9 +336,8 @@ def reconcile(
         )
     pair_by_sap = {p.sap_row: p for p in pairs}
 
-    eligible_ids = {p["asset_id"] for p in phys.values() if p["_eligible"]}
     sap_rows = [
-        _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, discrepancies)
+        _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, discrepancies)
         for r, s in sorted(sap.items())
     ]
     phys_rows = [
@@ -391,10 +345,9 @@ def reconcile(
         for r, p in sorted(phys.items())
     ]
     for p in pairs:
-        _pair_flags(p, phys[p.physical_row], discrepancies)
+        _pair_flags(p, phys[p.physical_row], sap[p.sap_row], discrepancies)
 
-    qr = _qr_assessment(data, sap, phys, core_off, cfg)
-    summary = _summary(phys_rows, sap_rows, pairs, groups, kept_decisions, use_qr, cfg)
+    summary = _summary(phys_rows, sap_rows, pairs, groups, kept_decisions, cfg)
     return ReconResult(
         summary=summary,
         physical_rows=phys_rows,
@@ -402,7 +355,6 @@ def reconcile(
         pairs=pairs,
         tie_groups=groups,
         discrepancies=discrepancies,
-        qr_assessment=qr,
         decisions=kept_decisions,
         warnings=warnings,
     )
@@ -411,16 +363,16 @@ def reconcile(
 def _data_quality(phys, sap, phys_dup, sap_dup, data, out: list[Discrepancy]) -> None:
     for issue in data.issues:
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DATA_QUALITY,
+            Discrepancy.of(
+                DiscrepancyKind.DATA_QUALITY,
+                issue.note,
                 physical_row=issue.excel_row if issue.source == "physical" else None,
                 sap_row=issue.excel_row if issue.source == "sap" else None,
-                message=issue.message,
             )
         )
-    for label, rows, dups, key, col in (
-        ("Asset ID", phys, phys_dup, "physical_row", "asset_id"),
-        ("QR code", sap, sap_dup, "sap_row", "qr_code"),
+    for code, rows, dups, key, col in (
+        ("asset_id_conflict", phys, phys_dup, "physical_row", "asset_id"),
+        ("qr_code_conflict", sap, sap_dup, "sap_row", "qr_code"),
     ):
         seen: dict[str, list[int]] = defaultdict(list)
         for r, row in rows.items():
@@ -429,20 +381,17 @@ def _data_quality(phys, sap, phys_dup, sap_dup, data, out: list[Discrepancy]) ->
         for value, where in seen.items():
             if len(where) > 1:
                 out.append(
-                    Discrepancy(
-                        kind=DiscrepancyKind.DATA_QUALITY,
+                    Discrepancy.of(
+                        DiscrepancyKind.DATA_QUALITY,
+                        note(code, value=value, rows=", ".join(map(str, where))),
                         **{key: where[0]},
                         asset_id=value if col == "asset_id" else None,
-                        message=(
-                            f"{label} {value} appears on rows {', '.join(map(str, where))} "
-                            "whose other values differ (not a plain double entry)."
-                        ),
                     )
                 )
 
 
 def _build_ties(
-    m: _Matcher, core: _Core, decisions: list[ManualDecision], warnings: list[str]
+    m: _Matcher, core: _Core, decisions: list[ManualDecision], warnings: list[Note]
 ) -> tuple[list[TieGroup], list[ManualDecision]]:
     groups: list[TieGroup] = []
     kept: list[ManualDecision] = []
@@ -482,10 +431,7 @@ def _build_ties(
             if d is None:
                 continue
             if d.asset_id is not None and (d.asset_id not in cand_ids or d.asset_id in used):
-                warnings.append(
-                    f"Manual decision for SAP row {sr} (asset {d.asset_id}) no longer fits "
-                    "its tie group and was dropped."
-                )
+                warnings.append(note("decision_invalid", sap_row=sr, asset_id=d.asset_id))
                 continue
             chosen[sr] = d.asset_id
             if d.asset_id is not None:
@@ -542,18 +488,13 @@ def _build_ties(
 
     for sr in by_sap:
         if sr not in in_any_group:
-            warnings.append(
-                f"Manual decision for SAP row {sr} was dropped: "
-                "that row no longer needs a decision."
-            )
+            warnings.append(note("decision_stale", sap_row=sr))
     return groups, kept
 
 
 def _pair_confidence(m: _Matcher, core: _Core, sr: int, pr: int, g, provisional: bool):
     if g is not None:
         return Confidence.NEEDS_DECISION if provisional else Confidence.MANUAL
-    if sr in core.qr_pairs:
-        return Confidence.HIGH_QR
     t = _norm(m.sap[sr]["item_name"])
     alt_s = [r for r in core.pool_s.get(t, []) if r != sr and m.feasible(pr, r)]
     alt_p = [r for r in core.pool_p.get(t, []) if r != pr and m.feasible(r, sr)]
@@ -569,40 +510,36 @@ def _pair_confidence(m: _Matcher, core: _Core, sr: int, pr: int, g, provisional:
     return Confidence.MEDIUM
 
 
-def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, out) -> SapRow:
-    notes: list[str] = []
+def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, out) -> SapRow:
+    notes: list[Note] = []
     pair = pair_by_sap.get(r)
     g = tie_of_sap.get(r)
     asset_id = suggested = None
     confidence = None
     matched_row = None
-    qr_agrees = None
     if r in sap_dup:
         status = MatchStatus.DUPLICATE
-        notes.append(f"Identical to SAP row {sap_dup[r]} (double data entry).")
-        out.append(Discrepancy(kind=DiscrepancyKind.DUPLICATE, sap_row=r, message=notes[-1]))
+        notes.append(note("sap_duplicate", first=sap_dup[r]))
+        out.append(Discrepancy.of(DiscrepancyKind.DUPLICATE, notes[-1], sap_row=r))
     elif g is not None:
         slot = next(sl for sl in g.slots if sl.sap_row == r)
         if not slot.decided:
             status, confidence = MatchStatus.NEEDS_DECISION, Confidence.NEEDS_DECISION
             suggested = slot.suggested_asset_id
             matched_row = pair.physical_row if pair else None
-            notes.append(f"Tie group {g.group_id}: pick the physical unit (suggested {suggested}).")
-            out.append(
-                Discrepancy(
-                    kind=DiscrepancyKind.UNRESOLVED_TIE,
-                    sap_row=r,
-                    message=(
-                        f"{g.sap_type} ({g.year}) in tie group {g.group_id}: the attributes "
-                        "cannot tell these units apart; a decision is needed "
-                        f"(suggested: {suggested or 'leave unmatched'})."
-                    ),
-                )
+            notes.append(note("tie_pick", group=g.group_id, suggested=suggested))
+            msg = note(
+                "tie_unresolved",
+                sap_type=g.sap_type,
+                year=g.year,
+                group=g.group_id,
+                suggested=suggested,
             )
+            out.append(Discrepancy.of(DiscrepancyKind.UNRESOLVED_TIE, msg, sap_row=r))
         elif slot.chosen_asset_id is None:
             status, confidence = MatchStatus.SAP_ONLY, Confidence.MANUAL
-            notes.append("Manually left unmatched.")
-            out.append(Discrepancy(kind=DiscrepancyKind.SAP_ONLY, sap_row=r, message=notes[-1]))
+            notes.append(note("manual_unmatched"))
+            out.append(Discrepancy.of(DiscrepancyKind.SAP_ONLY, notes[-1], sap_row=r))
         else:
             status, confidence = MatchStatus.MANUAL, Confidence.MANUAL
             asset_id, matched_row = pair.asset_id, pair.physical_row
@@ -611,30 +548,8 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, out) ->
         status = MatchStatus.LOCATION_MISMATCH if pair.location_mismatch else MatchStatus.MATCHED
     else:
         status = MatchStatus.SAP_ONLY
-        if r in core.qr_missing:
-            notes.append(f"QR references missing asset {core.qr_missing[r]}.")
-        msg = f"No physical unit found for this {s['item_name']} (missing / lost asset)."
-        out.append(Discrepancy(kind=DiscrepancyKind.SAP_ONLY, sap_row=r, message=msg))
-    if r in core.qr_notes:
-        notes.append(core.qr_notes[r])
-
-    qid = s["qr_asset_id"]
-    if qid is not None and status is not MatchStatus.DUPLICATE:
-        if pair is not None and (asset_id or suggested):
-            qr_agrees = qid == (asset_id or suggested)
-        elif pair is None and qid in eligible_ids:
-            qr_agrees = False
-        if qr_agrees is False:
-            if status is MatchStatus.NEEDS_DECISION:
-                notes.append(f"QR code suggests asset {qid}.")
-            else:
-                msg = f"QR code points to asset {qid}, but the match is {asset_id or 'none'}."
-                notes.append(msg)
-                out.append(
-                    Discrepancy(
-                        kind=DiscrepancyKind.QR_DISAGREEMENT, sap_row=r, asset_id=qid, message=msg
-                    )
-                )
+        msg = note("sap_only", item=s["item_name"])
+        out.append(Discrepancy.of(DiscrepancyKind.SAP_ONLY, msg, sap_row=r))
     return SapRow(
         excel_row=r,
         item_name=s["item_name"],
@@ -647,13 +562,11 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, out) ->
         city=s["city"],
         remarks=s["remarks"],
         qr_code=s["qr_code"],
-        qr_asset_id=qid,
         asset_id=asset_id,
         suggested_asset_id=suggested,
         match_status=status,
         confidence=confidence,
         matched_physical_row=matched_row,
-        qr_agrees=qr_agrees,
         tie_group_id=g.group_id if g else None,
         duplicate_of=sap_dup.get(r),
         notes=notes,
@@ -661,40 +574,35 @@ def _sap_row(r, s, sap_dup, pair_by_sap, tie_of_sap, core, eligible_ids, out) ->
 
 
 def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> PhysicalRow:
-    notes: list[str] = []
+    notes: list[Note] = []
     match = phys_match.get(r)
     g = tie_of_phys.get(r)
     confidence = None
     matched_sap = None
     if r in phys_dup:
         status = MatchStatus.DUPLICATE
-        notes.append(f"Identical to physical row {phys_dup[r]} (double data entry).")
+        notes.append(note("physical_duplicate", first=phys_dup[r]))
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DUPLICATE,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=notes[-1],
+            Discrepancy.of(
+                DiscrepancyKind.DUPLICATE, notes[-1], physical_row=r, asset_id=p["asset_id"]
             )
         )
     elif p["_defective"]:
         status = MatchStatus.DEFECTIVE
-        notes.append("Defective – excluded (expected to be absent from SAP).")
+        notes.append(note("defective_excluded"))
     elif p["sap_type"] is None:
         status = MatchStatus.UNCLASSIFIED
-        notes.append("No type rule matches this item name and description.")
+        notes.append(note("unclassified_note"))
+        msg = note("unclassified", item=p["item_name"], description=p["description"])
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.UNCLASSIFIED,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=f"'{p['item_name']}: {p['description']}' matches no type rule.",
+            Discrepancy.of(
+                DiscrepancyKind.UNCLASSIFIED, msg, physical_row=r, asset_id=p["asset_id"]
             )
         )
     elif g is not None and (match is None or match[1]) and g.pending_slots:
         status, confidence = MatchStatus.NEEDS_DECISION, Confidence.NEEDS_DECISION
         matched_sap = match[0] if match else None
-        notes.append(f"Candidate in tie group {g.group_id}.")
+        notes.append(note("tie_candidate", group=g.group_id))
     elif match is not None:
         sr, _ = match
         pair = pair_by_sap[sr]
@@ -708,14 +616,11 @@ def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> Phys
     else:
         status = MatchStatus.PHYSICAL_ONLY
         if g is not None:
-            notes.append("Left unmatched by the manual tie decisions.")
-        msg = f"No SAP row found for this {p['sap_type']} (asset {p['asset_id']})."
+            notes.append(note("manual_left_physical"))
+        msg = note("physical_only", sap_type=p["sap_type"], asset_id=p["asset_id"])
         out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.PHYSICAL_ONLY,
-                physical_row=r,
-                asset_id=p["asset_id"],
-                message=msg,
+            Discrepancy.of(
+                DiscrepancyKind.PHYSICAL_ONLY, msg, physical_row=r, asset_id=p["asset_id"]
             )
         )
     return PhysicalRow(
@@ -743,73 +648,21 @@ def _phys_row(r, p, phys_dup, phys_match, pair_by_sap, tie_of_phys, out) -> Phys
     )
 
 
-def _pair_flags(pair: Pair, p: dict, out: list[Discrepancy]) -> None:
+def _pair_flags(pair: Pair, p: dict, s: dict, out: list[Discrepancy]) -> None:
     if pair.provisional:
         return
     ref = {"physical_row": pair.physical_row, "sap_row": pair.sap_row, "asset_id": pair.asset_id}
     if pair.location_mismatch:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.LOCATION_MISMATCH,
-                **ref,
-                message=f"Physical says {p['city']}, SAP says a different building.",
-            )
-        )
+        msg = note("location_mismatch", city=p["city"], building=s["building"])
+        out.append(Discrepancy.of(DiscrepancyKind.LOCATION_MISMATCH, msg, **ref))
     if p["deactivation_date"] is not None:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.DEACTIVATED,
-                **ref,
-                message="Deactivated but present in SAP (has a deactivation date).",
-            )
-        )
+        out.append(Discrepancy.of(DiscrepancyKind.DEACTIVATED, note("deactivated"), **ref))
     if pair.year_gap:
-        out.append(
-            Discrepancy(
-                kind=DiscrepancyKind.YEAR_GAP,
-                **ref,
-                message=f"Activation year and serial year differ by {pair.year_gap}.",
-            )
-        )
+        msg = note("year_gap", gap=pair.year_gap)
+        out.append(Discrepancy.of(DiscrepancyKind.YEAR_GAP, msg, **ref))
 
 
-def _qr_assessment(data, sap, phys, core_off: _Core, cfg: AppConfig) -> QrAssessment:
-    tie_rows = {r for t in core_off.ties for r in t.sap_rows}
-    all_ids = {p["asset_id"] for p in phys.values()}
-    compared = agreeing = compared_out = agreeing_out = 0
-    for sr, pr in core_off.pairs.items():
-        qid = sap[sr]["qr_asset_id"]
-        if qid is None:
-            continue
-        ok = qid == phys[pr]["asset_id"]
-        compared += 1
-        agreeing += ok
-        if sr not in tie_rows:
-            compared_out += 1
-            agreeing_out += ok
-    total = len(sap)
-    parseable = sum(s["qr_asset_id"] is not None for s in sap.values())
-    hint = cfg.matching.qr_hint
-    reliable = bool(
-        total
-        and compared_out
-        and parseable / total >= hint.min_coverage
-        and agreeing_out / compared_out >= hint.min_agreement
-    )
-    return QrAssessment(
-        column_present="qr_code" in data.loaded.sap.column_map,
-        total_rows=total,
-        parseable=parseable,
-        present_in_physical=sum(s["qr_asset_id"] in all_ids for s in sap.values()),
-        compared=compared,
-        agreeing=agreeing,
-        compared_outside_ties=compared_out,
-        agreeing_outside_ties=agreeing_out,
-        looks_reliable=reliable,
-    )
-
-
-def _summary(phys_rows, sap_rows, pairs, groups, decisions, use_qr, cfg) -> Summary:
+def _summary(phys_rows, sap_rows, pairs, groups, decisions, cfg) -> Summary:
     return Summary(
         physical_total=len(phys_rows),
         sap_total=len(sap_rows),
@@ -822,7 +675,6 @@ def _summary(phys_rows, sap_rows, pairs, groups, decisions, use_qr, cfg) -> Summ
         tie_slots=sum(len(g.slots) for g in groups),
         tie_slots_pending=sum(g.pending_slots for g in groups),
         manual_decisions=len(decisions),
-        use_qr=use_qr,
         rules_version=cfg.type_rules.version,
     )
 

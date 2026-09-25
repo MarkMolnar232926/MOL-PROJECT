@@ -44,7 +44,7 @@
     },
     "/api/sessions": {
       "post": {
-        "summary": "Upload one workbook, or physical + SAP files, and run matching (QR off)",
+        "summary": "Upload one workbook, or physical + SAP files, and run matching",
         "operationId": "create_session_api_sessions_post",
         "requestBody": {
           "content": {
@@ -114,66 +114,6 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResult"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Unknown session or tie group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid input",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{session_id}/rematch": {
-      "post": {
-        "summary": "Rematch",
-        "description": "Re-run matching; manual decisions are kept where still valid, dropped with a\nwarning otherwise.",
-        "operationId": "rematch_api_sessions__session_id__rematch_post",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RematchRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -472,7 +412,6 @@
         "type": "string",
         "enum": [
           "High",
-          "High (QR)",
           "Medium",
           "Manual",
           "Needs decision"
@@ -628,6 +567,30 @@
             ],
             "title": "Asset Id"
           },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          },
           "message": {
             "type": "string",
             "title": "Message"
@@ -636,6 +599,7 @@
         "type": "object",
         "required": [
           "kind",
+          "code",
           "message"
         ],
         "title": "Discrepancy"
@@ -650,7 +614,6 @@
           "Unclassified",
           "Unresolved tie",
           "Deactivated warning",
-          "QR disagreement",
           "Year gap",
           "Data quality"
         ],
@@ -793,6 +756,45 @@
           "Unclassified"
         ],
         "title": "MatchStatus"
+      },
+      "Note": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "Note",
+        "description": "One message: ``code`` + ``params`` for translation, ``text`` in English."
       },
       "Pair": {
         "properties": {
@@ -1065,7 +1067,7 @@
           },
           "notes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Notes"
@@ -1091,124 +1093,6 @@
           "match_status"
         ],
         "title": "PhysicalRow"
-      },
-      "QrAssessment": {
-        "properties": {
-          "column_present": {
-            "type": "boolean",
-            "title": "Column Present"
-          },
-          "total_rows": {
-            "type": "integer",
-            "title": "Total Rows"
-          },
-          "parseable": {
-            "type": "integer",
-            "title": "Parseable"
-          },
-          "present_in_physical": {
-            "type": "integer",
-            "title": "Present In Physical"
-          },
-          "compared": {
-            "type": "integer",
-            "title": "Compared"
-          },
-          "agreeing": {
-            "type": "integer",
-            "title": "Agreeing"
-          },
-          "compared_outside_ties": {
-            "type": "integer",
-            "title": "Compared Outside Ties"
-          },
-          "agreeing_outside_ties": {
-            "type": "integer",
-            "title": "Agreeing Outside Ties"
-          },
-          "looks_reliable": {
-            "type": "boolean",
-            "title": "Looks Reliable"
-          },
-          "parseable_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parseable Pct",
-            "readOnly": true
-          },
-          "present_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Present Pct",
-            "readOnly": true
-          },
-          "agreement_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agreement Pct",
-            "readOnly": true
-          },
-          "agreement_outside_ties_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agreement Outside Ties Pct",
-            "readOnly": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "column_present",
-          "total_rows",
-          "parseable",
-          "present_in_physical",
-          "compared",
-          "agreeing",
-          "compared_outside_ties",
-          "agreeing_outside_ties",
-          "looks_reliable",
-          "parseable_pct",
-          "present_pct",
-          "agreement_pct",
-          "agreement_outside_ties_pct"
-        ],
-        "title": "QrAssessment"
-      },
-      "RematchRequest": {
-        "properties": {
-          "use_qr": {
-            "type": "boolean",
-            "title": "Use Qr"
-          }
-        },
-        "type": "object",
-        "required": [
-          "use_qr"
-        ],
-        "title": "RematchRequest"
       },
       "SapRow": {
         "properties": {
@@ -1326,17 +1210,6 @@
             ],
             "title": "Qr Code"
           },
-          "qr_asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Qr Asset Id"
-          },
           "asset_id": {
             "anyOf": [
               {
@@ -1383,17 +1256,6 @@
             ],
             "title": "Matched Physical Row"
           },
-          "qr_agrees": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Qr Agrees"
-          },
           "tie_group_id": {
             "anyOf": [
               {
@@ -1418,7 +1280,7 @@
           },
           "notes": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Notes"
@@ -1437,7 +1299,6 @@
           "city",
           "remarks",
           "qr_code",
-          "qr_asset_id",
           "asset_id",
           "match_status"
         ],
@@ -1458,7 +1319,7 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Warnings"
@@ -1516,9 +1377,6 @@
             "type": "array",
             "title": "Discrepancies"
           },
-          "qr_assessment": {
-            "$ref": "#/components/schemas/QrAssessment"
-          },
           "decisions": {
             "items": {
               "$ref": "#/components/schemas/ManualDecision"
@@ -1528,7 +1386,7 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Note"
             },
             "type": "array",
             "title": "Warnings"
@@ -1553,7 +1411,6 @@
           "pairs",
           "tie_groups",
           "discrepancies",
-          "qr_assessment",
           "decisions",
           "warnings",
           "session_id",
@@ -1616,10 +1473,6 @@
             "type": "integer",
             "title": "Manual Decisions"
           },
-          "use_qr": {
-            "type": "boolean",
-            "title": "Use Qr"
-          },
           "rules_version": {
             "type": "string",
             "title": "Rules Version"
@@ -1638,7 +1491,6 @@
           "tie_slots",
           "tie_slots_pending",
           "manual_decisions",
-          "use_qr",
           "rules_version"
         ],
         "title": "Summary"

@@ -34,7 +34,7 @@ sap:
     depth_cm:       {headers: ["Depth (cm)", "Depth"]}
     serial_no:      {headers: ["Serial No.", "Serial No", "Serial number"], required: true}
     remarks:        {headers: ["Remarks"]}
-    qr_code:        {headers: ["QR Code"]}
+    qr_code:        {headers: ["QR Code"]}  # label only, shown in exports; not matched on
     building:       {headers: ["Building"], required: true}
 
 # Sheets that are never read by the engine (matched like headers).
