@@ -1,7 +1,7 @@
 """Console summary of a reconciliation run.
 
-python -m recon.report WORKBOOK.xlsx [--qr]
-python -m recon.report PHYSICAL.xlsx SAP.xlsx [--qr]
+python -m recon.report WORKBOOK.xlsx
+python -m recon.report PHYSICAL.xlsx SAP.xlsx
 """
 
 from __future__ import annotations
@@ -16,14 +16,10 @@ from .models import ReconResult
 from .normalize import normalize
 
 
-def _pct(v: float | None) -> str:
-    return "n/a" if v is None else f"{v:.1f} %"
-
-
 def format_report(res: ReconResult) -> str:
     s = res.summary
     out = [
-        f"QR matching: {'ON' if s.use_qr else 'off'}   rules v{s.rules_version}",
+        f"Rules v{s.rules_version}",
         f"Rows: physical {s.physical_total}, SAP {s.sap_total}   pairs {s.pairs}   "
         f"location mismatches {s.location_mismatches}",
         "Physical status: " + ", ".join(f"{k} {v}" for k, v in s.physical_status_counts.items()),
@@ -31,19 +27,6 @@ def format_report(res: ReconResult) -> str:
         "Confidence:      " + ", ".join(f"{k} {v}" for k, v in s.confidence_counts.items()),
         f"Tie groups: {s.tie_groups}, slots {s.tie_slots}, pending {s.tie_slots_pending}; "
         f"manual decisions {s.manual_decisions}",
-    ]
-    qr = res.qr_assessment
-    out += [
-        "",
-        f"QR assessment (column {'present' if qr.column_present else 'absent'}): "
-        f"parseable {qr.parseable}/{qr.total_rows} ({_pct(qr.parseable_pct)}), "
-        f"ID in Physical_Inventory {qr.present_in_physical}/{qr.total_rows} "
-        f"({_pct(qr.present_pct)}), agreement {qr.agreeing}/{qr.compared} "
-        f"({_pct(qr.agreement_pct)}), outside ties {qr.agreeing_outside_ties}/"
-        f"{qr.compared_outside_ties} ({_pct(qr.agreement_outside_ties_pct)})",
-        "  -> QR codes look reliable - consider enabling QR matching"
-        if qr.looks_reliable
-        else "  -> QR codes not reliable enough for a recommendation",
     ]
     if res.tie_groups:
         out += ["", "Tie groups:"]
@@ -67,8 +50,7 @@ def format_report(res: ReconResult) -> str:
 
 
 def main(argv: list[str]) -> int:
-    use_qr = "--qr" in argv
-    paths = [a for a in argv if a != "--qr"]
+    paths = list(argv)
     if len(paths) not in (1, 2):
         print(__doc__)
         return 2
@@ -77,7 +59,7 @@ def main(argv: list[str]) -> int:
         InputFile(Path(p).name, Path(p).read_bytes(), r) for p, r in zip(paths, roles, strict=True)
     ]
     try:
-        res = reconcile(normalize(load_inputs(files)), use_qr=use_qr)
+        res = reconcile(normalize(load_inputs(files)))
     except ReconError as exc:
         print(f"ERROR [{exc.code}]: {exc.message}")
         return 1

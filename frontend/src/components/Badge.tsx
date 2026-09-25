@@ -14,7 +14,6 @@ const STATUS_CLASSES: Record<MatchStatus, string> = {
 
 const CONFIDENCE_CLASSES: Record<Confidence, string> = {
   High: "bg-green-50 text-green-700 ring-green-600/20",
-  "High (QR)": "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   Medium: "bg-yellow-50 text-yellow-800 ring-yellow-600/20",
   Manual: "bg-blue-50 text-blue-700 ring-blue-600/20",
   "Needs decision": "bg-orange-50 text-orange-800 ring-orange-600/20",

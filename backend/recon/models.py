@@ -22,7 +22,6 @@ class MatchStatus(StrEnum):
 
 class Confidence(StrEnum):
     HIGH = "High"
-    HIGH_QR = "High (QR)"
     MEDIUM = "Medium"
     MANUAL = "Manual"
     NEEDS_DECISION = "Needs decision"
@@ -36,7 +35,6 @@ class DiscrepancyKind(StrEnum):
     UNCLASSIFIED = "Unclassified"
     UNRESOLVED_TIE = "Unresolved tie"
     DEACTIVATED = "Deactivated warning"
-    QR_DISAGREEMENT = "QR disagreement"
     YEAR_GAP = "Year gap"
     DATA_QUALITY = "Data quality"
 
@@ -76,14 +74,12 @@ class SapRow(BaseModel):
     building: str | None
     city: str | None
     remarks: str | None
-    qr_code: str | None
-    qr_asset_id: str | None
+    qr_code: str | None  # informational label; not used for matching
     asset_id: str | None  # final value to write into SAP (empty while a decision is pending)
     suggested_asset_id: str | None = None  # tie suggestion, never written on export
     match_status: MatchStatus
     confidence: Confidence | None = None
     matched_physical_row: int | None = None
-    qr_agrees: bool | None = None
     tie_group_id: str | None = None
     duplicate_of: int | None = None
     notes: list[str] = Field(default_factory=list)
@@ -164,42 +160,6 @@ class Discrepancy(BaseModel):
     message: str
 
 
-class QrAssessment(BaseModel):
-    column_present: bool
-    total_rows: int
-    parseable: int
-    present_in_physical: int
-    compared: int  # fuzzy pairs (QR off) whose SAP row has a parseable QR
-    agreeing: int
-    compared_outside_ties: int
-    agreeing_outside_ties: int
-    looks_reliable: bool
-
-    @staticmethod
-    def _pct(n: int, d: int) -> float | None:
-        return round(100 * n / d, 1) if d else None
-
-    @computed_field
-    @property
-    def parseable_pct(self) -> float | None:
-        return self._pct(self.parseable, self.total_rows)
-
-    @computed_field
-    @property
-    def present_pct(self) -> float | None:
-        return self._pct(self.present_in_physical, self.total_rows)
-
-    @computed_field
-    @property
-    def agreement_pct(self) -> float | None:
-        return self._pct(self.agreeing, self.compared)
-
-    @computed_field
-    @property
-    def agreement_outside_ties_pct(self) -> float | None:
-        return self._pct(self.agreeing_outside_ties, self.compared_outside_ties)
-
-
 class Summary(BaseModel):
     physical_total: int
     sap_total: int
@@ -212,7 +172,6 @@ class Summary(BaseModel):
     tie_slots: int
     tie_slots_pending: int
     manual_decisions: int
-    use_qr: bool
     rules_version: str
 
 
@@ -223,6 +182,5 @@ class ReconResult(BaseModel):
     pairs: list[Pair]
     tie_groups: list[TieGroup]
     discrepancies: list[Discrepancy]
-    qr_assessment: QrAssessment
     decisions: list[ManualDecision]
     warnings: list[str]

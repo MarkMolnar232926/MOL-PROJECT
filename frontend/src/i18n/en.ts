@@ -55,16 +55,6 @@ export const en = {
     warnings: "Warnings",
   },
 
-  qr: {
-    title: "QR codes",
-    parseable: "Readable QR codes",
-    present: "QR ID exists in Physical_Inventory",
-    agreement: "Agreement with attribute match (outside ties)",
-    noColumn: "The SAP export has no QR Code column.",
-    reliable: "QR codes look reliable — consider enabling QR matching.",
-    toggle: "Use QR code as direct match",
-    rematching: "Re-running the matching…",
-  },
 
   cols: {
     row: "Row",
@@ -81,7 +71,6 @@ export const en = {
     status: "Match status",
     confidence: "Confidence",
     matchedRow: "Matched row",
-    qrAgrees: "QR agrees?",
     notes: "Notes",
     issue: "Issue",
     physicalRow: "Physical row",
@@ -97,8 +86,6 @@ export const en = {
     size: "Size word",
     year: "Year (serial / activation)",
   },
-  yes: "Yes",
-  no: "No",
 
   detail: {
     title: "Matched pair",

@@ -27,15 +27,14 @@ class Session:
     session_id: str
     data: NormalizedInput
     cfg: AppConfig
-    use_qr: bool = False
     decisions: list[ManualDecision] = field(default_factory=list)
     result: ReconResult | None = None
     created_at: dt.datetime = field(default_factory=_now)
     last_access: dt.datetime = field(default_factory=_now)
 
     def rerun(self) -> ReconResult:
-        """Re-match with the current settings; keep only the decisions that still apply."""
-        self.result = reconcile(self.data, self.cfg, use_qr=self.use_qr, decisions=self.decisions)
+        """Re-run matching with the current decisions; keep only those that still apply."""
+        self.result = reconcile(self.data, self.cfg, decisions=self.decisions)
         self.decisions = list(self.result.decisions)
         return self.result
 

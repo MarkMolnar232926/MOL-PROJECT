@@ -13,7 +13,6 @@ import { ConfidenceBadge, StatusBadge } from "../components/Badge";
 import { columnHelper, DataTable, type Columns } from "../components/DataTable";
 import { KpiTiles } from "../components/KpiTiles";
 import { PairDetail } from "../components/PairDetail";
-import { QrPanel } from "../components/QrPanel";
 import { suggestionAssignments } from "../components/tieOptions";
 import { TiesView } from "../components/TiesView";
 import { t } from "../i18n/en";
@@ -39,10 +38,7 @@ const sapColumns: Columns<SapRow> = sapCol.columns([
     cell: (c) => <ConfidenceBadge confidence={c.row.original.confidence} />,
   }),
   sapCol.accessor((r) => r.matched_physical_row ?? "", { id: "matched", header: t.cols.matchedRow }),
-  sapCol.accessor((r) => (r.qr_agrees == null ? "" : r.qr_agrees ? t.yes : t.no), {
-    id: "qr_agrees",
-    header: t.cols.qrAgrees,
-  }),
+  sapCol.accessor((r) => r.qr_code ?? "", { id: "qr_code", header: t.cols.qr }),
   sapCol.accessor((r) => (r.notes ?? []).join(" "), { id: "notes", header: t.cols.notes }),
 ]);
 
@@ -83,13 +79,8 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
     retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 2,
   });
   const [tab, setTab] = useState<Tab>("sap");
-  const [qrTarget, setQrTarget] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<{ sap: number | null; physical: number | null } | null>(null);
 
-  const rematch = useMutation({
-    mutationFn: (useQr: boolean) => api.rematch(sessionId, useQr),
-    onSuccess: (data) => qc.setQueryData(key, data),
-  });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const decide = useMutation({
     mutationFn: ({ groupId, assignments }: { groupId: string; assignments: TieAssignment[] }) =>
@@ -134,8 +125,8 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
 
   if (!data) return <p>{t.loading}</p>;
 
-  const busy = decide.isPending || reset.isPending || acceptAll.isPending || rematch.isPending;
-  const tieError = [decide.error, reset.error, acceptAll.error, rematch.error].find(Boolean);
+  const busy = decide.isPending || reset.isPending || acceptAll.isPending;
+  const tieError = [decide.error, reset.error, acceptAll.error].find(Boolean);
   const tabs: [Tab, string][] = [
     ["sap", t.results.tabs.sap],
     ["physical", t.results.tabs.physical],
@@ -146,15 +137,6 @@ export function ResultsPage({ sessionId, onExpired }: Props) {
   return (
     <div className="space-y-4">
       <KpiTiles summary={data.summary} />
-      <QrPanel
-        qr={data.qr_assessment}
-        useQr={qrTarget ?? data.summary.use_qr}
-        busy={rematch.isPending}
-        onToggle={(v) => {
-          setQrTarget(v); // show the requested state at once, until the rematch returns
-          rematch.mutate(v, { onSettled: () => setQrTarget(null) });
-        }}
-      />
       {data.warnings.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
           <p className="font-medium">{t.results.warnings}</p>

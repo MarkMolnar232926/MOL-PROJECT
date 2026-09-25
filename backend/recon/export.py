@@ -40,7 +40,7 @@ STATUS_FILLS = {
     MatchStatus.UNCLASSIFIED: "FFF8CBAD",
 }
 
-SAP_EXTRA = ["Match status", "Confidence", "Matched physical row", "QR agrees?", "Notes"]
+SAP_EXTRA = ["Match status", "Confidence", "Matched physical row", "Notes"]
 PHYSICAL_EXTRA = ["Match status", "Matched SAP row", "SAP Item Name", "Notes"]
 
 
@@ -70,10 +70,6 @@ def _utc_naive(t: dt.datetime) -> dt.datetime:
     if t.tzinfo is not None:
         t = t.astimezone(dt.UTC).replace(tzinfo=None)
     return t.replace(microsecond=0)
-
-
-def _yes_no(v: bool | None) -> str | None:
-    return None if v is None else ("Yes" if v else "No")
 
 
 def _write_table(ws: Worksheet, headers: list[str], rows: list[list]) -> None:
@@ -143,7 +139,6 @@ def _sap_sheet(ws: Worksheet, sheet: SheetData, result: ReconResult) -> None:
                 r.match_status.value,
                 r.confidence.value if r.confidence else None,
                 r.matched_physical_row,
-                _yes_no(r.qr_agrees),
                 " ".join(r.notes) or None,
             ]
         )
@@ -195,10 +190,7 @@ def _discrepancy_sheet(ws: Worksheet, result: ReconResult) -> None:
 def _summary_sheet(
     ws: Worksheet, loaded: LoadedInput, result: ReconResult, generated_at: dt.datetime
 ) -> None:
-    s, qr = result.summary, result.qr_assessment
-
-    def pct(v: float | None) -> str:
-        return "n/a" if v is None else f"{v:.1f} %"
+    s = result.summary
 
     rows: list[list] = [
         ["Run", "Generated at", generated_at.replace(microsecond=0)],
@@ -209,7 +201,6 @@ def _summary_sheet(
         ],
         ["Run", "SAP_Export source", f"{loaded.sap.file_name} › {loaded.sap.sheet_name}"],
         ["Run", "Rule-set version", s.rules_version],
-        ["Run", "QR matching", "On" if s.use_qr else "Off"],
         ["Run", "Manual decisions", s.manual_decisions],
         ["Totals", "Physical rows", s.physical_total],
         ["Totals", "SAP rows", s.sap_total],
@@ -222,31 +213,6 @@ def _summary_sheet(
     rows += [["Physical status", k, v] for k, v in _ordered(s.physical_status_counts)]
     rows += [["SAP status", k, v] for k, v in _ordered(s.sap_status_counts)]
     rows += [["Confidence", k, v] for k, v in sorted(s.confidence_counts.items())]
-    rows += [
-        ["QR assessment", "QR column present", "Yes" if qr.column_present else "No"],
-        [
-            "QR assessment",
-            "Parseable QR codes",
-            f"{qr.parseable}/{qr.total_rows} ({pct(qr.parseable_pct)})",
-        ],
-        [
-            "QR assessment",
-            "QR ID exists in Physical_Inventory",
-            f"{qr.present_in_physical}/{qr.total_rows} ({pct(qr.present_pct)})",
-        ],
-        [
-            "QR assessment",
-            "Agreement with attribute match (QR off)",
-            f"{qr.agreeing}/{qr.compared} ({pct(qr.agreement_pct)})",
-        ],
-        [
-            "QR assessment",
-            "Agreement outside tie groups",
-            f"{qr.agreeing_outside_ties}/{qr.compared_outside_ties} "
-            f"({pct(qr.agreement_outside_ties_pct)})",
-        ],
-        ["QR assessment", "QR codes look reliable", "Yes" if qr.looks_reliable else "No"],
-    ]
     rows += [["Warning", "", w] for w in result.warnings]
     _write_table(ws, ["Section", "Item", "Value"], rows)
 
@@ -298,7 +264,7 @@ def export_workbook(
 
 
 def main(argv: list[str]) -> int:
-    """python -m recon.export WORKBOOK.xlsx [-o OUT.xlsx] [--qr] [--accept-suggestions]"""
+    """python -m recon.export WORKBOOK.xlsx [-o OUT.xlsx] [--accept-suggestions]"""
     import sys
     from pathlib import Path
 
@@ -308,7 +274,6 @@ def main(argv: list[str]) -> int:
     from .normalize import normalize
 
     args = list(argv)
-    use_qr = "--qr" in args
     accept = "--accept-suggestions" in args
     out = None
     if "-o" in args:
@@ -329,9 +294,9 @@ def main(argv: list[str]) -> int:
                 ]
             )
         )
-        result = reconcile(data, use_qr=use_qr)
+        result = reconcile(data)
         if accept:
-            result = reconcile(data, use_qr=use_qr, decisions=accept_suggestions(result))
+            result = reconcile(data, decisions=accept_suggestions(result))
     except ReconError as exc:
         print(f"ERROR [{exc.code}]: {exc.message}", file=sys.stderr)
         return 1

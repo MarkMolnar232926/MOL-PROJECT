@@ -18,7 +18,6 @@ async function uploadFixture(page: Page) {
 
 test("upload, accept all tie suggestions, export", async ({ page }) => {
   await uploadFixture(page);
-  await expect(page.getByText("QR codes look reliable")).toBeVisible();
 
   await page.getByRole("tab", { name: /Ties/ }).click();
   await expect(page.getByTestId("ties-remaining")).toHaveText("17 of 17 slots need a decision");

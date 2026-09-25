@@ -49,12 +49,11 @@ preview:
 docker:
 	docker compose up --build
 
-# Matching summary, e.g. make report QR=--qr
-QR ?=
+# Matching summary: counts and tie groups
 report:
-	cd backend && $(PY) -m recon.report $(abspath $(FILE)) $(QR)
+	cd backend && $(PY) -m recon.report $(abspath $(FILE))
 
-# Reconciled workbook, e.g. make export OUT=out.xlsx ARGS="--accept-suggestions --qr"
+# Reconciled workbook, e.g. make export OUT=out.xlsx ARGS=--accept-suggestions
 OUT ?= reconciled.xlsx
 ARGS ?=
 export:

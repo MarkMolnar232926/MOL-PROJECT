@@ -43,10 +43,6 @@ class SessionResult(ReconResult):
     detected: list[DetectedSheet]
 
 
-class RematchRequest(BaseModel):
-    use_qr: bool
-
-
 class TieDecisionRequest(BaseModel):
     assignments: list[TieAssignment] = Field(
         description="One entry per SAP row to decide; physical_asset_id null = leave unmatched."

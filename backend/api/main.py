@@ -28,7 +28,6 @@ from .schemas import (
     DetectedSheet,
     ErrorResponse,
     HealthResponse,
-    RematchRequest,
     SessionCreated,
     SessionResult,
     TieDecisionRequest,
@@ -167,7 +166,7 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
         response_model=SessionCreated,
         status_code=201,
         responses={**ERRORS, 413: {"model": ErrorResponse, "description": "File too large"}},
-        summary="Upload one workbook, or physical + SAP files, and run matching (QR off)",
+        summary="Upload one workbook, or physical + SAP files, and run matching",
     )
     async def create_session(
         workbook: UploadFile | None = File(None, description="One workbook with both sheets"),
@@ -194,19 +193,6 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
 
     @router.get("/sessions/{session_id}/result", response_model=SessionResult, responses=ERRORS)
     def get_result(session: Session = Depends(get_session)) -> SessionResult:
-        return result_of(session)
-
-    @router.post("/sessions/{session_id}/rematch", response_model=SessionResult, responses=ERRORS)
-    def rematch(
-        body: RematchRequest,
-        session: Session = Depends(get_session),
-        store: SessionStore = Depends(get_store),
-    ) -> SessionResult:
-        """Re-run matching; manual decisions are kept where still valid, dropped with a
-        warning otherwise."""
-        session.use_qr = body.use_qr
-        session.rerun()
-        store.save(session)
         return result_of(session)
 
     @router.put("/sessions/{session_id}/ties/{group_id}", response_model=TieGroup, responses=ERRORS)

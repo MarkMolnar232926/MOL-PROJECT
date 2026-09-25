@@ -38,8 +38,7 @@ make test-e2e    # Playwright end-to-end (upload → accept ties → export)
 make lint        # ruff + tsc
 make preview     # parsed preview of the practice workbook
 make preview FILE=path/to/other.xlsx
-make report      # matching summary: counts, QR assessment, tie groups
-make report QR=--qr   # same with QR matching switched on
+make report      # matching summary: counts and tie groups
 make export OUT=out.xlsx                          # reconciled workbook (ties left pending)
 make export OUT=out.xlsx ARGS=--accept-suggestions  # ... with all tie suggestions accepted
 ```
@@ -57,8 +56,7 @@ the engine skips it (`ignored_sheets` in `columns.yaml`).
 1. `make dev`, then open http://localhost:5173.
 2. **Upload**: choose *One workbook* or *Two files*, drop the file(s), then *Upload and reconcile*.
    The panel shows which sheets were found and how, or lists missing columns.
-3. **Results**: KPI tiles, the QR assessment (with the *Use QR code as direct match* toggle),
-   and tabs for all SAP rows, all physical rows, discrepancies and ties. Click a row to see it
+3. **Results**: KPI tiles and tabs for all SAP rows, all physical rows, discrepancies and ties. Click a row to see it
    side by side with its matched counterpart; differing fields are highlighted.
 4. **Ties**: one card per tie group. Each SAP row has a dropdown of the candidate units,
    pre-filled with the FIFO suggestion; a unit picked for one row disappears from the other
@@ -77,9 +75,10 @@ All files live in `backend/config/` (override the directory with `RECON_CONFIG_D
 - **columns.yaml** – expected sheet names and column headers per source. Headers match
   case-/whitespace-insensitively; each column can list aliases. Missing *required* columns
   reject the upload with a list of what is missing; optional ones (e.g. `QR Code`) may be absent.
+  The QR code is shown as a label only; it is not an Asset ID and is never used for matching.
 - **type_rules.yaml** – `(item name, description keyword) → SAP Item Name`, first match wins.
 - **locations.yaml** – City ↔ Building ↔ Site code.
-- **matching.yaml** – excluded statuses, assignment cost weights, QR hint thresholds.
+- **matching.yaml** – excluded statuses and assignment cost weights.
 
 ## Input detection
 
@@ -94,9 +93,8 @@ Interactive docs at http://localhost:8000/docs while `make api` (or `make dev`) 
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/sessions` | multipart upload: `workbook`, or `physical` + `sap`; runs matching (QR off) |
-| `GET /api/sessions/{id}/result` | full result: summary, rows, pairs, tie groups, discrepancies, QR assessment |
-| `POST /api/sessions/{id}/rematch` | `{"use_qr": true}`; manual decisions kept where still valid |
+| `POST /api/sessions` | multipart upload: `workbook`, or `physical` + `sap`; runs matching |
+| `GET /api/sessions/{id}/result` | full result: summary, rows, pairs, tie groups, discrepancies |
 | `PUT /api/sessions/{id}/ties/{group_id}` | `{"assignments": [{"sap_row": 2, "physical_asset_id": "84247161"}]}` (`null` = leave unmatched) |
 | `DELETE /api/sessions/{id}/ties/{group_id}` | reset a tie group to the suggestion |
 | `GET /api/sessions/{id}/export` | download `reconciled_<timestamp>.xlsx` |

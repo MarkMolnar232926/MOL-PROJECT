@@ -14,7 +14,6 @@ from .loader import EXCEL_ROW, LoadedInput, SheetData
 WIDTH_RE = re.compile(r"(\d+)\s*cm\s+wide", re.IGNORECASE)
 SIZE_RE = re.compile(r"\b(small|large)\b", re.IGNORECASE)
 SERIAL_YEAR_RE = re.compile(r"SN-(\d{4})-", re.IGNORECASE)
-QR_RE = re.compile(r"^INV00(\d{8})$", re.IGNORECASE)
 YEAR_FIRST_RE = re.compile(r"^(?P<y>\d{4})[-/.](?P<m>\d{1,2})[-/.](?P<d>\d{1,2})(?:[ T].*)?$")
 INT_RE = re.compile(r"^\s*(-?\d+)(?:\.0+)?\s*(?:cm)?\s*$", re.IGNORECASE)
 
@@ -93,15 +92,6 @@ def serial_year(serial: object) -> int | None:
     text = clean_str(serial)
     m = SERIAL_YEAR_RE.search(text) if text else None
     return int(m.group(1)) if m else None
-
-
-def parse_qr(qr: object) -> str | None:
-    """``INV00`` + 8 digits -> the 8-digit asset ID; anything else -> None (never raises)."""
-    text = clean_str(qr)
-    if not text:
-        return None
-    m = QR_RE.match(text.replace(" ", ""))
-    return m.group(1) if m else None
 
 
 def parse_date(value: object, dayfirst: bool = True) -> pd.Timestamp | None:
@@ -266,7 +256,6 @@ def normalize_sap(sheet: SheetData, cfg: AppConfig) -> tuple[pd.DataFrame, list[
                 "serial_year": serial_year(serial),
                 "remarks": clean_str(get("remarks")),
                 "qr_code": clean_str(get("qr_code")),
-                "qr_asset_id": parse_qr(get("qr_code")),
                 "building": building,
                 "city": building_to_city.get(building) if building else None,
             }

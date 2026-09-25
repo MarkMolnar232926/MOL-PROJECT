@@ -13,7 +13,7 @@ from openpyxl import load_workbook
 
 from recon import InputFile, load_inputs, normalize
 from recon.engine import reconcile
-from recon.models import Confidence, ManualDecision, MatchStatus
+from recon.models import Confidence, DiscrepancyKind, ManualDecision, MatchStatus
 
 # PLAN.md 6.6: the slots the Answer_Key pairs differently from FIFO.
 PLAN_TIES = {
@@ -69,13 +69,8 @@ def answer_key(data) -> dict[int, str]:
 
 
 @pytest.fixture(scope="module")
-def off(data):
-    return reconcile(data, use_qr=False)
-
-
-@pytest.fixture(scope="module")
-def on(data):
-    return reconcile(data, use_qr=True)
+def result(data):
+    return reconcile(data)
 
 
 def rows_with(result, sheet: str, status: MatchStatus) -> set[int]:
@@ -83,41 +78,41 @@ def rows_with(result, sheet: str, status: MatchStatus) -> set[int]:
     return {r.excel_row for r in rows if r.match_status is status}
 
 
-def test_loading_and_classification(off):
-    assert off.summary.physical_total == 84
-    assert off.summary.sap_total == 84
-    assert all(r.sap_type for r in off.physical_rows)
-    assert rows_with(off, "physical", MatchStatus.UNCLASSIFIED) == set()
+def test_loading_and_classification(result):
+    assert result.summary.physical_total == 84
+    assert result.summary.sap_total == 84
+    assert all(r.sap_type for r in result.physical_rows)
+    assert rows_with(result, "physical", MatchStatus.UNCLASSIFIED) == set()
 
 
-def test_duplicates(off):
-    assert rows_with(off, "physical", MatchStatus.DUPLICATE) == {31, 44, 83}
-    assert rows_with(off, "sap", MatchStatus.DUPLICATE) == {68, 77, 79}
+def test_duplicates(result):
+    assert rows_with(result, "physical", MatchStatus.DUPLICATE) == {31, 44, 83}
+    assert rows_with(result, "sap", MatchStatus.DUPLICATE) == {68, 77, 79}
 
 
-def test_defective_excluded(off):
-    assert rows_with(off, "physical", MatchStatus.DEFECTIVE) == {42, 43, 45, 51, 57, 79, 82}
+def test_defective_excluded(result):
+    assert rows_with(result, "physical", MatchStatus.DEFECTIVE) == {42, 43, 45, 51, 57, 79, 82}
 
 
-def test_pairs_and_leftovers(off):
-    assert len(off.pairs) == 74
-    assert rows_with(off, "physical", MatchStatus.PHYSICAL_ONLY) == set()
-    assert rows_with(off, "sap", MatchStatus.SAP_ONLY) == {27, 32, 38, 50, 52, 72, 74}
-    assert all(p.year_gap == 0 for p in off.pairs)
+def test_pairs_and_leftovers(result):
+    assert len(result.pairs) == 74
+    assert rows_with(result, "physical", MatchStatus.PHYSICAL_ONLY) == set()
+    assert rows_with(result, "sap", MatchStatus.SAP_ONLY) == {27, 32, 38, 50, 52, 72, 74}
+    assert all(p.year_gap == 0 for p in result.pairs)
 
 
-def test_location_mismatches(off):
-    ids = {p.asset_id for p in off.pairs if p.location_mismatch}
+def test_location_mismatches(result):
+    ids = {p.asset_id for p in result.pairs if p.location_mismatch}
     fixed = {"84208743", "84261222", "84283321", "84285415"}
     assert len(ids) == 5
     assert fixed < ids
     assert len(ids - fixed) == 1 and (ids - fixed) <= {"84287104", "84271689"}
 
 
-def test_pairs_outside_plan_ties_equal_answer_key(off, answer_key):
+def test_pairs_outside_plan_ties_equal_answer_key(result, answer_key):
     plan_serials = set().union(*(s for _, s in PLAN_TIES.values()))
-    sap_by_row = {r.excel_row: r for r in off.sap_rows}
-    outside = [p for p in off.pairs if sap_by_row[p.sap_row].serial_no not in plan_serials]
+    sap_by_row = {r.excel_row: r for r in result.sap_rows}
+    outside = [p for p in result.pairs if sap_by_row[p.sap_row].serial_no not in plan_serials]
     assert len(outside) == 63
     wrong = [
         (p.sap_row, p.asset_id, answer_key[p.sap_row])
@@ -127,18 +122,18 @@ def test_pairs_outside_plan_ties_equal_answer_key(off, answer_key):
     assert wrong == []
 
 
-def test_confident_pairs_equal_answer_key(off, answer_key):
-    confident = [p for p in off.pairs if p.tie_group_id is None]
+def test_confident_pairs_equal_answer_key(result, answer_key):
+    confident = [p for p in result.pairs if p.tie_group_id is None]
     assert len(confident) == 57
     assert all(p.asset_id == answer_key[p.sap_row] for p in confident)
     assert {p.confidence for p in confident} <= {Confidence.HIGH, Confidence.MEDIUM}
 
 
-def test_tie_groups(off):
-    assert off.summary.tie_groups == 7
-    assert off.summary.tie_slots == off.summary.tie_slots_pending == 17
-    assert len(rows_with(off, "sap", MatchStatus.NEEDS_DECISION)) == 17
-    by_type = {g.sap_type: g for g in off.tie_groups}
+def test_tie_groups(result):
+    assert result.summary.tie_groups == 7
+    assert result.summary.tie_slots == result.summary.tie_slots_pending == 17
+    assert len(rows_with(result, "sap", MatchStatus.NEEDS_DECISION)) == 17
+    by_type = {g.sap_type: g for g in result.tie_groups}
     assert set(by_type) == set(DETECTED_TIES)
     for sap_type, ids in DETECTED_TIES.items():
         g = by_type[sap_type]
@@ -147,55 +142,26 @@ def test_tie_groups(off):
         # suggestions pair only within their group, one-to-one
         suggested = [s.suggested_asset_id for s in g.slots]
         assert set(suggested) == ids
-    serials = {g.sap_type: {s.serial_no for s in g.slots} for g in off.tie_groups}
+    serials = {g.sap_type: {s.serial_no for s in g.slots} for g in result.tie_groups}
     for sap_type, (ids, plan_serials) in PLAN_TIES.items():
         assert ids <= {c.asset_id for c in by_type[sap_type].candidates}
         assert plan_serials <= serials[sap_type]
     # pending slots never carry a final Asset ID
     assert all(
-        r.asset_id is None for r in off.sap_rows if r.match_status is MatchStatus.NEEDS_DECISION
+        r.asset_id is None for r in result.sap_rows if r.match_status is MatchStatus.NEEDS_DECISION
     )
 
 
-def test_totals_reconcile(off):
-    p = off.summary.physical_status_counts
-    s = off.summary.sap_status_counts
+def test_totals_reconcile(result):
+    p = result.summary.physical_status_counts
+    s = result.summary.sap_status_counts
     paired_p = sum(v for k, v in p.items() if k not in {"Defective – excluded", "Duplicate entry"})
     assert (paired_p, p["Defective – excluded"], p["Duplicate entry"]) == (74, 7, 3)
     paired_s = sum(v for k, v in s.items() if k not in {"SAP only", "Duplicate entry"})
     assert (paired_s, s["SAP only"], s["Duplicate entry"]) == (74, 7, 3)
 
 
-def test_qr_assessment(off, on):
-    for res in (off, on):  # the assessment is always computed with QR off
-        qr = res.qr_assessment
-        assert qr.column_present
-        assert qr.parseable_pct == 100.0
-        assert (qr.present_in_physical, qr.total_rows, qr.present_pct) == (77, 84, 91.7)
-        assert qr.agreement_outside_ties_pct == 100.0
-        assert qr.looks_reliable
-
-
-def test_qr_on_matches_answer_key(on, answer_key):
-    assert len(on.pairs) == 74
-    assert all(p.asset_id == answer_key[p.sap_row] for p in on.pairs)
-    assert all(p.confidence is Confidence.HIGH_QR for p in on.pairs)
-    assert on.summary.tie_slots_pending == 0
-    assert rows_with(on, "sap", MatchStatus.SAP_ONLY) == {27, 32, 38, 50, 52, 72, 74}
-    assert all(
-        "QR references missing asset" in " ".join(r.notes)
-        for r in on.sap_rows
-        if r.match_status is MatchStatus.SAP_ONLY
-    )
-    assert on.summary.location_mismatches == 5
-
-
-def test_qr_off_validation_column(off):
-    confident = {p.sap_row for p in off.pairs if p.tie_group_id is None}
-    assert all(r.qr_agrees for r in off.sap_rows if r.excel_row in confident)
-
-
-def test_resolving_ties_with_answer_key_gives_full_match(data, off, answer_key):
+def test_resolving_ties_with_answer_key_gives_full_match(data, result, answer_key):
     now = dt.datetime(2026, 1, 1)
     decisions = [
         ManualDecision(
@@ -205,7 +171,7 @@ def test_resolving_ties_with_answer_key_gives_full_match(data, off, answer_key):
             proposed_asset_id=s.suggested_asset_id,
             decided_at=now,
         )
-        for g in off.tie_groups
+        for g in result.tie_groups
         for s in g.slots
     ]
     res = reconcile(data, decisions=decisions)
@@ -218,6 +184,15 @@ def test_resolving_ties_with_answer_key_gives_full_match(data, off, answer_key):
         assert sap_by_row[d.sap_row].match_status is MatchStatus.MANUAL
 
 
-def test_deactivated_warnings(off):
-    flagged = {d.asset_id for d in off.discrepancies if d.kind.value == "Deactivated warning"}
+def test_qr_codes_are_labels_only(result):
+    """QR codes are not Asset IDs: they are kept for display but never used for matching."""
+    assert all(r.qr_code and r.qr_code.startswith("INV") for r in result.sap_rows)
+    tie_slots = [s for g in result.tie_groups for s in g.slots]
+    assert all(s.qr_code for s in tie_slots)
+    assert not any("QR" in n for r in result.sap_rows for n in r.notes)
+    assert "QR disagreement" not in {k.value for k in DiscrepancyKind}
+
+
+def test_deactivated_warnings(result):
+    flagged = {d.asset_id for d in result.discrepancies if d.kind.value == "Deactivated warning"}
     assert flagged == {"84213492", "84200684", "84241548"}

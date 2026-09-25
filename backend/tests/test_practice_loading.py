@@ -32,6 +32,6 @@ def test_practice_parsing(practice_file):
     assert int(p["deactivation_date"].notna().sum()) == 3
     assert s["serial_year"].notna().all()
     assert s["width_cm"].notna().all()
-    assert s["qr_asset_id"].notna().all()
+    assert s["qr_code"].notna().all()
     assert all(v is None for v in s["asset_id"])
     assert data.issues == []
