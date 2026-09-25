@@ -1,4 +1,4 @@
-.PHONY: install dev api web test test-backend test-frontend lint format gen-api preview docker report export
+.PHONY: install dev api web test test-e2e test-backend test-frontend lint format gen-api preview docker report export
 
 PY ?= python3
 
@@ -20,6 +20,10 @@ web:
 	cd frontend && npm run dev
 
 test: test-backend test-frontend
+
+# End-to-end: starts its own API (:8010) and web (:5180) servers.
+test-e2e:
+	cd frontend && npx playwright test
 
 test-backend:
 	cd backend && $(PY) -m pytest

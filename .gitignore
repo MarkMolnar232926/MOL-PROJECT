@@ -7,3 +7,5 @@ node_modules/
 dist/
 *.tsbuildinfo
 reconciled_*.xlsx
+test-results/
+playwright-report/
