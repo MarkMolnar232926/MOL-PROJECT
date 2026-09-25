@@ -69,6 +69,10 @@ def test_asset_id_and_int_parsing():
 def test_parse_date():
     assert parse_date(dt.datetime(2019, 3, 1)) == pd.Timestamp(2019, 3, 1)
     assert parse_date("2019-03-01") == pd.Timestamp(2019, 3, 1)
+    assert parse_date("2021/12/31") == pd.Timestamp(2021, 12, 31)
+    assert parse_date("2021/03/04") == pd.Timestamp(2021, 3, 4)  # never Y-D-M
+    assert parse_date("2021.3.4") == pd.Timestamp(2021, 3, 4)
+    assert parse_date("2021/02/30") is None
     assert parse_date("03/04/2021", dayfirst=True) == pd.Timestamp(2021, 4, 3)
     assert parse_date(43525) == pd.Timestamp(2019, 3, 1)  # Excel serial
     assert parse_date("not a date") is None

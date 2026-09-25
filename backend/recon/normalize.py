@@ -15,6 +15,7 @@ WIDTH_RE = re.compile(r"(\d+)\s*cm\s+wide", re.IGNORECASE)
 SIZE_RE = re.compile(r"\b(small|large)\b", re.IGNORECASE)
 SERIAL_YEAR_RE = re.compile(r"SN-(\d{4})-", re.IGNORECASE)
 QR_RE = re.compile(r"^INV00(\d{8})$", re.IGNORECASE)
+YEAR_FIRST_RE = re.compile(r"^(?P<y>\d{4})[-/.](?P<m>\d{1,2})[-/.](?P<d>\d{1,2})(?:[ T].*)?$")
 INT_RE = re.compile(r"^\s*(-?\d+)(?:\.0+)?\s*(?:cm)?\s*$", re.IGNORECASE)
 
 
@@ -116,9 +117,14 @@ def parse_date(value: object, dayfirst: bool = True) -> pd.Timestamp | None:
     text = clean_str(value)
     if not text:
         return None
-    iso = re.match(r"^\d{4}-\d{2}-\d{2}", text)
+    # Year-first text (2021/12/31, 2021-12-31, 2021.12.31) is always year-month-day.
+    if m := YEAR_FIRST_RE.match(text):
+        try:
+            return pd.Timestamp(int(m["y"]), int(m["m"]), int(m["d"]))
+        except ValueError:
+            return None
     try:
-        ts = pd.to_datetime(text, dayfirst=dayfirst and not iso)
+        ts = pd.to_datetime(text, dayfirst=dayfirst)
     except (ValueError, TypeError, OverflowError):
         return None
     return None if pd.isna(ts) else ts

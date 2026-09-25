@@ -40,5 +40,6 @@ sap:
 # Sheets that are never read by the engine (matched like headers).
 ignored_sheets: ["Answer_Key"]
 
-# Dates given as text (not real Excel dates) are parsed day-first, e.g. 03/04/2021 = 3 April.
+# Dates given as text (not real Excel dates): year-first text such as 2021/12/31 is always
+# read as year/month/day. Other text is read day-first when true (03/04/2021 = 3 April).
 date_dayfirst: true
