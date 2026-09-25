@@ -1,0 +1,16 @@
+services:
+  api:
+    build: ./backend
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend:/app/backend
+      - ./tests:/app/tests:ro
+
+  web:
+    build: ./frontend
+    ports: ["5173:5173"]
+    environment:
+      API_URL: http://api:8000
+    volumes:
+      - ./frontend/src:/app/frontend/src
+    depends_on: [api]

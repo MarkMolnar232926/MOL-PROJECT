@@ -1,0 +1,170 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Inventory Reconciliation API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "summary": "Get Config",
+        "operationId": "get_config_api_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConfigResponse": {
+        "properties": {
+          "rules_version": {
+            "type": "string",
+            "title": "Rules Version"
+          },
+          "type_rules": {
+            "items": {
+              "$ref": "#/components/schemas/TypeRule"
+            },
+            "type": "array",
+            "title": "Type Rules"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "type": "array",
+            "title": "Locations"
+          },
+          "cost_weights": {
+            "$ref": "#/components/schemas/CostWeights"
+          },
+          "excluded_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Excluded Statuses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rules_version",
+          "type_rules",
+          "locations",
+          "cost_weights",
+          "excluded_statuses"
+        ],
+        "title": "ConfigResponse"
+      },
+      "CostWeights": {
+        "properties": {
+          "year_gap": {
+            "type": "number",
+            "title": "Year Gap",
+            "default": 1000
+          },
+          "location_mismatch": {
+            "type": "number",
+            "title": "Location Mismatch",
+            "default": 100
+          },
+          "fifo_rank": {
+            "type": "number",
+            "title": "Fifo Rank",
+            "default": 0.001
+          }
+        },
+        "type": "object",
+        "title": "CostWeights"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "Location": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "building": {
+            "type": "string",
+            "title": "Building"
+          },
+          "site_code": {
+            "type": "string",
+            "title": "Site Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "city",
+          "building",
+          "site_code"
+        ],
+        "title": "Location"
+      },
+      "TypeRule": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "keyword": {
+            "type": "string",
+            "title": "Keyword",
+            "default": ""
+          },
+          "sap_type": {
+            "type": "string",
+            "title": "Sap Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "sap_type"
+        ],
+        "title": "TypeRule"
+      }
+    }
+  }
+}

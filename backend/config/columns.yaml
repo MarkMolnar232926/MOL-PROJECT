@@ -1,0 +1,44 @@
+# Expected sheet and column names for both sources.
+#
+# Headers are matched case-insensitively with whitespace collapsed, so
+# "  asset   id " matches "Asset ID". Each canonical key lists one or more
+# accepted header texts (aliases); the first one is the display name.
+# Columns marked required: true must be present or the upload is rejected.
+
+physical:
+  sheet_names: ["Physical_Inventory", "Physical Inventory"]
+  columns:
+    asset_id:          {headers: ["Asset ID"], required: true}
+    item_name:         {headers: ["Item name"], required: true}
+    description:       {headers: ["Description"], required: true}
+    custodian:         {headers: ["Custodian"]}
+    site_code:         {headers: ["Site code"]}
+    city:              {headers: ["City"], required: true}
+    activation_date:   {headers: ["Activation date"], required: true}
+    deactivation_date: {headers: ["Deactivation date"]}
+    gross_value:       {headers: ["Gross value ($)", "Gross value"]}
+    monthly_depr:      {headers: ["Monthly depr. ($)", "Monthly depr."]}
+    status:            {headers: ["Status"]}
+
+sap:
+  sheet_names: ["SAP_Export", "SAP Export"]
+  columns:
+    asset_id:       {headers: ["Asset ID"], required: true}
+    asset_group:    {headers: ["Asset Group"]}
+    asset_category: {headers: ["Asset Category"]}
+    item_name:      {headers: ["Item Name"], required: true}
+    color:          {headers: ["Color", "Colour"], required: true}
+    material:       {headers: ["Material"]}
+    width_cm:       {headers: ["Width (cm)", "Width"], required: true}
+    height_cm:      {headers: ["Height (cm)", "Height"]}
+    depth_cm:       {headers: ["Depth (cm)", "Depth"]}
+    serial_no:      {headers: ["Serial No.", "Serial No", "Serial number"], required: true}
+    remarks:        {headers: ["Remarks"]}
+    qr_code:        {headers: ["QR Code"]}
+    building:       {headers: ["Building"], required: true}
+
+# Sheets that are never read by the engine (matched like headers).
+ignored_sheets: ["Answer_Key"]
+
+# Dates given as text (not real Excel dates) are parsed day-first, e.g. 03/04/2021 = 3 April.
+date_dayfirst: true
