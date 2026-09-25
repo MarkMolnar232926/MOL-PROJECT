@@ -1,4 +1,4 @@
-.PHONY: install dev api web test test-backend test-frontend lint format gen-api preview docker report
+.PHONY: install dev api web test test-backend test-frontend lint format gen-api preview docker report export
 
 PY ?= python3
 
@@ -49,3 +49,9 @@ docker:
 QR ?=
 report:
 	cd backend && $(PY) -m recon.report $(abspath $(FILE)) $(QR)
+
+# Reconciled workbook, e.g. make export OUT=out.xlsx ARGS="--accept-suggestions --qr"
+OUT ?= reconciled.xlsx
+ARGS ?=
+export:
+	cd backend && $(PY) -m recon.export $(abspath $(FILE)) -o $(abspath $(OUT)) $(ARGS)

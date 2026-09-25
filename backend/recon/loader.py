@@ -44,6 +44,7 @@ class SheetData:
     column_map: dict[str, str]  # canonical key -> original header
     frame: pd.DataFrame  # one column per original header + EXCEL_ROW
     missing_optional: list[str] = field(default_factory=list)
+    column_fills: dict[str, str] = field(default_factory=dict)  # header -> ARGB of whole column
 
     @property
     def row_count(self) -> int:
@@ -115,7 +116,16 @@ def _missing_required(mapping: dict[str, str], spec: SourceSpec) -> list[str]:
     return [spec.columns[k].display_name for k in spec.required_keys if k not in mapping]
 
 
-def _read_frame(ws: Worksheet, headers: list[str]) -> pd.DataFrame:
+def _fill_rgb(cell) -> str | None:
+    fill = getattr(cell, "fill", None)
+    if fill is None or not fill.fill_type or fill.fgColor is None:
+        return None
+    rgb = fill.fgColor.rgb
+    return rgb if isinstance(rgb, str) else None
+
+
+def _read_frame(ws: Worksheet, headers: list[str]) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Read data rows; also return fills shared by every data cell of a column."""
     labels = [h or f"Column {i + 1}" for i, h in enumerate(headers)]
     seen: dict[str, int] = {}
     for i, label in enumerate(labels):  # make duplicate header texts unique
@@ -127,17 +137,24 @@ def _read_frame(ws: Worksheet, headers: list[str]) -> pd.DataFrame:
     width = len(labels)
     records: list[list] = []
     rows: list[int] = []
-    for excel_row, values in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        values = list(values[:width]) + [None] * max(0, width - len(values))
+    fills: list[set[str | None]] = [set() for _ in range(width)]
+    for excel_row, cells in enumerate(ws.iter_rows(min_row=2), start=2):
+        cells = list(cells[:width])
+        values = [c.value for c in cells] + [None] * max(0, width - len(cells))
         values = [v.strip() if isinstance(v, str) else v for v in values]
         values = [None if v == "" else v for v in values]
         if all(v is None for v in values):
             continue
         records.append(values)
         rows.append(excel_row)
+        for i in range(width):
+            fills[i].add(_fill_rgb(cells[i]) if i < len(cells) else None)
     frame = pd.DataFrame(records, columns=labels, dtype=object)
     frame[EXCEL_ROW] = rows
-    return frame
+    column_fills = {
+        label: next(iter(f)) for label, f in zip(labels, fills, strict=True) if len(f) == 1
+    }
+    return frame, {k: v for k, v in column_fills.items() if v}
 
 
 def _choose(
@@ -227,7 +244,7 @@ def load_inputs(files: list[InputFile], cfg: AppConfig | None = None) -> LoadedI
                     f"as the {cand.file.role} file. The files may have been swapped."
                 )
             ws = workbooks[cand.workbook_index][cand.sheet_name]
-            frame = _read_frame(ws, cand.headers)
+            frame, column_fills = _read_frame(ws, cand.headers)
             labels = [c for c in frame.columns if c != EXCEL_ROW]
             mapping = _map_columns(labels, spec)
             sheets[source] = SheetData(
@@ -238,6 +255,7 @@ def load_inputs(files: list[InputFile], cfg: AppConfig | None = None) -> LoadedI
                 headers=labels,
                 column_map=mapping,
                 frame=frame,
+                column_fills=column_fills,
                 missing_optional=[
                     c.display_name for k, c in spec.columns.items() if k not in mapping
                 ],

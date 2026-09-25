@@ -11,8 +11,8 @@ and phase plan.
 |---|---|---|
 | 1 | Scaffold, loading, header validation, normalisation | done |
 | 2 | Matching engine + golden tests | done |
-| 3 | Excel export | next |
-| 4 | REST API + sessions | – |
+| 3 | Excel export | done |
+| 4 | REST API + sessions | next |
 | 5 | React UI | – |
 
 ## Layout
@@ -39,6 +39,8 @@ make preview     # parsed preview of the practice workbook
 make preview FILE=path/to/other.xlsx
 make report      # matching summary: counts, QR assessment, tie groups
 make report QR=--qr   # same with QR matching switched on
+make export OUT=out.xlsx                          # reconciled workbook (ties left pending)
+make export OUT=out.xlsx ARGS=--accept-suggestions  # ... with all tie suggestions accepted
 ```
 
 With Docker instead: `docker compose up --build`, then open http://localhost:5173.
