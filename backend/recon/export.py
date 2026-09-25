@@ -144,7 +144,7 @@ def _sap_sheet(ws: Worksheet, sheet: SheetData, result: ReconResult) -> None:
                 r.confidence.value if r.confidence else None,
                 r.matched_physical_row,
                 _yes_no(r.qr_agrees),
-                "; ".join(r.notes) or None,
+                " ".join(r.notes) or None,
             ]
         )
         statuses.append(r.match_status)
@@ -161,7 +161,7 @@ def _physical_sheet(ws: Worksheet, sheet: SheetData, result: ReconResult) -> Non
         r = by_row[excel_row]
         rows.append(
             list(values)
-            + [r.match_status.value, r.matched_sap_row, r.sap_type, "; ".join(r.notes) or None]
+            + [r.match_status.value, r.matched_sap_row, r.sap_type, " ".join(r.notes) or None]
         )
         statuses.append(r.match_status)
     _write_table(ws, sheet.headers + PHYSICAL_EXTRA, rows)

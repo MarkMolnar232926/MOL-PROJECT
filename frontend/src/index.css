@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+  button:focus-visible,
+  select:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-600;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-1 rounded-md bg-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .input {
+    @apply rounded-md border border-slate-300 bg-white px-2 py-1 text-sm;
+  }
+  .link {
+    @apply font-medium text-blue-700 underline hover:text-blue-900;
+  }
+}

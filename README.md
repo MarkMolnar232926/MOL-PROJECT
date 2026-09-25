@@ -13,7 +13,7 @@ and phase plan.
 | 2 | Matching engine + golden tests | done |
 | 3 | Excel export | done |
 | 4 | REST API + sessions | done |
-| 5 | React UI | next |
+| 5 | React UI | done |
 
 ## Layout
 
@@ -34,6 +34,7 @@ Requirements: Python 3.11+, Node 22+.
 make install     # pip install -e backend[dev] + npm install
 make dev         # API on :8000, web on :5173 (Vite proxies /api to the API)
 make test        # pytest + vitest
+make test-e2e    # Playwright end-to-end (upload → accept ties → export)
 make lint        # ruff + tsc
 make preview     # parsed preview of the practice workbook
 make preview FILE=path/to/other.xlsx
@@ -50,6 +51,24 @@ With Docker instead: `docker compose up --build`, then open http://localhost:517
 Copy `Inventory_Reconciliation_Practice_1.xlsx` to `tests/fixtures/`. Tests that need it are
 skipped when it is missing. The hidden `Answer_Key` sheet is only ever read by the test suite;
 the engine skips it (`ignored_sheets` in `columns.yaml`).
+
+## Using the app
+
+1. `make dev`, then open http://localhost:5173.
+2. **Upload**: choose *One workbook* or *Two files*, drop the file(s), then *Upload and reconcile*.
+   The panel shows which sheets were found and how, or lists missing columns.
+3. **Results**: KPI tiles, the QR assessment (with the *Use QR code as direct match* toggle),
+   and tabs for all SAP rows, all physical rows, discrepancies and ties. Click a row to see it
+   side by side with its matched counterpart; differing fields are highlighted.
+4. **Ties**: one card per tie group. Each SAP row has a dropdown of the candidate units,
+   pre-filled with the FIFO suggestion; a unit picked for one row disappears from the other
+   rows' dropdowns. *Save choices*, *Accept suggestion* or *Reset* per group, or
+   *Accept all suggestions* at the top.
+5. **Export Excel** (top right) downloads the 5-sheet workbook. If tie slots are still open,
+   you are asked first; those rows are exported with an empty Asset ID.
+6. **Rules** shows the type rules, locations and cost weights (read-only).
+
+UI text lives in `frontend/src/i18n/en.ts`.
 
 ## Configuration
 
