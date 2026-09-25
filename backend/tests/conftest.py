@@ -187,3 +187,41 @@ def practice_file() -> Path:
     if not PRACTICE_FILE.exists():
         pytest.skip(f"practice workbook not present at {PRACTICE_FILE}")
     return PRACTICE_FILE
+
+
+def phys(asset, item, desc, city="Riverside", date=(2020, 1, 1), status=None, deact=None):
+    """One Physical_Inventory row in sheet column order."""
+    site = {"Riverside": 4021, "Lakeside": 4087}.get(city)
+    deact = dt.datetime(*deact) if deact else None
+    return [asset, item, desc, "Tester", site, city, dt.datetime(*date), deact, 100, 1, status]
+
+
+def sap(item, color, width, serial, building="RVS", qr=None, remarks=None):
+    """One SAP_Export row in sheet column order."""
+    return [
+        None,
+        "> Movable Furniture",
+        "Other",
+        item,
+        color,
+        "Wood",
+        width,
+        50,
+        50,
+        serial,
+        remarks,
+        qr,
+        building,
+    ]
+
+
+def make_input(physical_rows, sap_rows, drop_sap=()):
+    """Build a workbook from row lists and return the normalised input."""
+    from recon import InputFile, load_inputs, normalize
+
+    keep = [i for i, h in enumerate(SAP_HEADERS) if h not in drop_sap]
+    sap_sheet = [[r[i] for i in keep] for r in [SAP_HEADERS, *sap_rows]]
+    data = build_workbook(
+        {"Physical_Inventory": [PHYSICAL_HEADERS, *physical_rows], "SAP_Export": sap_sheet}
+    )
+    return normalize(load_inputs([InputFile("t.xlsx", data)]))

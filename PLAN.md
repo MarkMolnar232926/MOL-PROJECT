@@ -242,8 +242,8 @@ Required assertions with **QR off**:
 - 7 defective excluded: physical rows **42, 43, 45, 51, 57, 79, 82**.
 - **74** pairs (incl. tie suggestions); **0** physical-only; **7** SAP-only at SAP rows **27, 32, 38, 50, 52, 72, 74**.
 - Location mismatches exactly for Asset IDs **84208743, 84261222, 84283321, 84285415** plus one of the Shelf Unit tie pair (84287104 / 84271689).
-- Every pair outside the 5 tie groups in 6.6 equals the Answer_Key (**63/63**).
-- Exactly **5 tie groups / 11 SAP slots** with status Needs decision, each containing exactly the rows listed in 6.6; suggestions pair only within their group.
+- Every pair outside the 5 tie groups in 6.6 equals the Answer_Key (**63/63**, counting FIFO suggestions of the other tie groups).
+- **[DECISION, phase 2]** Ties follow the attribute-based definition in 6.6, which yields **7 tie groups / 17 SAP slots** with status Needs decision on the practice file: the 5 groups listed in 6.6 (each contained in a detected group) plus Coat Rack 2021 (2 slots), Computer Desk 2024 RVS (2) and two more Shelf Units 2024 (84257423, 84229044) in the Shelf Unit group. The table in 6.6 lists only the slots where FIFO disagrees with the Answer_Key, which the engine cannot know. Suggestions pair only within their group.
 - Totals reconcile: physical 74 + 7 + 3 = 84; SAP 74 + 7 + 3 = 84.
 
 With **QR on**: 74/74 pairs equal the Answer_Key and **0** tie slots remain undecided. QR assessment on the fixture reports 100 % parseable, 91.7 % (77/84) IDs present in Physical_Inventory (the 7 SAP-only rows reference absent assets), and 100 % agreement outside tie groups.

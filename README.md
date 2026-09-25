@@ -10,8 +10,8 @@ and phase plan.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Scaffold, loading, header validation, normalisation | done |
-| 2 | Matching engine + golden tests | next |
-| 3 | Excel export | – |
+| 2 | Matching engine + golden tests | done |
+| 3 | Excel export | next |
 | 4 | REST API + sessions | – |
 | 5 | React UI | – |
 
@@ -37,6 +37,8 @@ make test        # pytest + vitest
 make lint        # ruff + tsc
 make preview     # parsed preview of the practice workbook
 make preview FILE=path/to/other.xlsx
+make report      # matching summary: counts, QR assessment, tie groups
+make report QR=--qr   # same with QR matching switched on
 ```
 
 With Docker instead: `docker compose up --build`, then open http://localhost:5173.

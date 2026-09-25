@@ -1,4 +1,4 @@
-.PHONY: install dev api web test test-backend test-frontend lint format gen-api preview docker
+.PHONY: install dev api web test test-backend test-frontend lint format gen-api preview docker report
 
 PY ?= python3
 
@@ -44,3 +44,8 @@ preview:
 
 docker:
 	docker compose up --build
+
+# Matching summary, e.g. make report QR=--qr
+QR ?=
+report:
+	cd backend && $(PY) -m recon.report $(abspath $(FILE)) $(QR)
