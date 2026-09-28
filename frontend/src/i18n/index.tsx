@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ApiError, type Discrepancy, type Note } from "../api/client";
+import { ApiError, type Note } from "../api/client";
 import { en, type Messages } from "./en";
 import { hu } from "./hu";
 
@@ -58,11 +58,6 @@ export function useLanguage() {
 export function noteText(t: Messages, note: Note): string {
   const format = t.messages[note.code];
   return format ? format(note.params ?? {}) : note.text;
-}
-
-export function discrepancyText(t: Messages, d: Discrepancy): string {
-  const format = t.messages[d.code];
-  return format ? format(d.params ?? {}) : d.message;
 }
 
 /** Translate a known API error code; otherwise fall back to the server's message. */

@@ -1,7 +1,15 @@
 import pytest
 from conftest import PHYSICAL_HEADERS, SAP_HEADERS, build_workbook
 
-from recon import InputFile, InvalidFileError, MissingColumnsError, SheetDetectionError, load_inputs
+from recon import (
+    InputFile,
+    InvalidFileError,
+    MissingColumnsError,
+    SheetChoiceRequiredError,
+    SheetDetectionError,
+    load_inputs,
+    load_source,
+)
 
 
 def test_one_workbook_detected_by_sheet_name(combined_workbook):
@@ -99,3 +107,55 @@ def test_blank_rows_skipped_and_row_numbers_kept(physical_sheet, sap_sheet):
 def test_rejects_non_xlsx(name, data):
     with pytest.raises(InvalidFileError):
         load_inputs([InputFile(name, data)])
+
+
+# --- load_source: one file, one source (two-step upload) -----------------------------------
+
+
+def test_load_source_picks_the_sheet_by_name(practice_file):
+    file = InputFile(practice_file.name, practice_file.read_bytes())
+    original = load_source(file, "physical")
+    incoming = load_source(file, "sap")
+    assert (original.sheet_name, original.detected_by) == ("Physical_Inventory", "sheet_name")
+    assert (incoming.sheet_name, incoming.detected_by) == ("SAP_Export", "sheet_name")
+    assert "Answer_Key" not in original.sheets_available
+    assert original.sheets_available == ["Task", "Physical_Inventory", "SAP_Export"]
+
+
+def test_load_source_by_header_signature(physical_sheet):
+    data = build_workbook({"Notes": [["hello"]], "Stocktake": physical_sheet})
+    sheet = load_source(InputFile("p.xlsx", data), "physical")
+    assert (sheet.sheet_name, sheet.detected_by) == ("Stocktake", "header_signature")
+
+
+def test_load_source_asks_when_several_sheets_fit(physical_sheet):
+    data = build_workbook({"Jan": physical_sheet, "Feb": physical_sheet})
+    with pytest.raises(SheetChoiceRequiredError) as err:
+        load_source(InputFile("p.xlsx", data), "physical")
+    assert err.value.details[0]["matching_sheets"] == ["Jan", "Feb"]
+    sheet = load_source(InputFile("p.xlsx", data), "physical", sheet="feb")
+    assert (sheet.sheet_name, sheet.detected_by) == ("Feb", "user_choice")
+
+
+def test_load_source_unknown_or_unfit_sheet(physical_sheet, sap_sheet):
+    data = build_workbook({"Stocktake": physical_sheet, "Export": sap_sheet})
+    with pytest.raises(SheetDetectionError) as err:
+        load_source(InputFile("p.xlsx", data), "physical", sheet="Nope")
+    assert err.value.details[0]["sheets_seen"] == ["Stocktake", "Export"]
+    with pytest.raises(MissingColumnsError):
+        load_source(InputFile("p.xlsx", data), "physical", sheet="Export")
+    with pytest.raises(SheetDetectionError):
+        load_source(InputFile("p.xlsx", data), "physical", sheet="Answer_Key")
+
+
+def test_load_source_hints_at_the_wrong_step(sap_sheet):
+    data = build_workbook({"Export": sap_sheet})
+    with pytest.raises(SheetDetectionError) as err:
+        load_source(InputFile("s.xlsx", data), "physical")
+    assert err.value.details[0]["looks_like"] == "sap"
+    assert "right step" in err.value.message
+
+
+def test_load_source_rejects_non_xlsx():
+    with pytest.raises(InvalidFileError):
+        load_source(InputFile("data.csv", b"a,b"), "physical")

@@ -1,69 +1,123 @@
-import type { SessionCreated, TieGroup } from "../api/client";
+import type {
+  Candidate,
+  CriterionCheck,
+  ExistingItem,
+  IncomingResult,
+  RowStatus,
+  SessionResult,
+  SessionState,
+} from "../api/client";
 
-export function tieGroup(overrides: Partial<TieGroup> = {}): TieGroup {
-  const candidate = (asset_id: string, physical_row: number, date: string) => ({
-    physical_row,
-    asset_id,
-    activation_date: date,
-    city: "Lakeside",
-    building: "LKS",
-    custodian: "Tester",
-    gross_value: 220,
-  });
-  const slot = (sap_row: number, serial: string, suggested: string) => ({
-    sap_row,
-    serial_no: serial,
-    building: "LKS",
-    remarks: null,
-    qr_code: null,
-    suggested_asset_id: suggested,
-    chosen_asset_id: null,
-    decided: false,
-    confidence: "Needs decision" as const,
-  });
+export function unit(assetId: string, over: Partial<ExistingItem> = {}): ExistingItem {
   return {
-    group_id: "work-desk-2021-r3",
+    excel_row: 2,
+    asset_id: assetId,
+    item_name: "table",
+    description: "office desk with 4 drawers, 120cm wide, oak",
     sap_type: "Work Desk",
     color: "oak",
     width_cm: 120,
-    year: 2021,
-    locations: ["LKS"],
-    physical_rows: [17, 47, 78],
-    sap_rows: [3, 69, 75],
-    candidates: [
-      candidate("84298003", 78, "2021-03-17"),
-      candidate("84214252", 73, "2021-05-06"),
-      candidate("84236836", 47, "2021-09-17"),
-    ],
-    slots: [
-      slot(3, "SN-2021-3808", "84214252"),
-      slot(69, "SN-2021-4894", "84236836"),
-      slot(75, "SN-2021-3498", "84298003"),
-    ],
-    proposed_pairs: [],
-    pending_slots: 3,
-    ...overrides,
+    size_word: null,
+    materials: ["oak"],
+    city: "Lakeside",
+    building: "LKS",
+    custodian: "Marcus Reid",
+    activation_date: "2021-05-06",
+    deactivation_date: null,
+    status: null,
+    defective: false,
+    ...over,
   };
 }
 
-export const created: SessionCreated = {
-  session_id: "sess-1",
-  detected: [
-    { source: "physical", file_name: "book.xlsx", sheet_name: "Physical_Inventory", detected_by: "sheet_name", row_count: 84, missing_optional_columns: [] },
-    { source: "sap", file_name: "book.xlsx", sheet_name: "SAP_Export", detected_by: "sheet_name", row_count: 84, missing_optional_columns: ["QR Code"] },
-  ],
-  warnings: [],
-  summary: {
-    physical_total: 84, sap_total: 84, pairs: 74,
-    physical_status_counts: {}, sap_status_counts: {}, confidence_counts: {},
-    location_mismatches: 5, tie_groups: 7, tie_slots: 17, tie_slots_pending: 17,
-    manual_decisions: 0, rules_version: "1",
-  },
-};
-
-export function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+export function row(excelRow: number, status: RowStatus, assetId: string | null = null): IncomingResult {
+  const resolved = !["no_candidate", "duplicate"].includes(status);
+  return {
+    item: {
+      excel_row: excelRow,
+      asset_id: null,
+      asset_group: "> Movable Furniture",
+      asset_category: "Desks",
+      item_name: "Work Desk",
+      color: "oak",
+      material: "Oak veneer",
+      width_cm: 120,
+      height_cm: 75,
+      depth_cm: 60,
+      serial_no: `SN-2021-${excelRow}`,
+      remarks: null,
+      qr_code: `INV00000${excelRow}`,
+      building: "LKS",
+      city: "Lakeside",
+      duplicate_of: status === "duplicate" ? 2 : null,
+    },
     status,
-    headers: { "Content-Type": "application/json" },
-  });
+    resolved,
+    asset_id: assetId,
+    existing_row: assetId ? 10 : null,
+    score: assetId ? 100 : null,
+    checks: [],
+    location_mismatch: false,
+    tie_resolved: status === "auto_newest",
+    auto_asset_id: assetId,
+    reason: null,
+    note: null,
+    notes: [],
+  };
+}
+
+export function result(rows: IncomingResult[], sessionId = "s1"): SessionResult {
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  const unresolved = rows.filter((r) => !r.resolved).length;
+  return {
+    session_id: sessionId,
+    summary: {
+      incoming_rows: rows.length,
+      existing_units: 81,
+      resolved: rows.length - unresolved,
+      unresolved,
+      status_counts: counts,
+      location_mismatches: 0,
+      tie_resolved: 0,
+      unpaired_existing: 1,
+      auto_match_threshold: 80,
+      export_ready: unresolved === 0,
+    },
+    rows,
+    unpaired_existing: [unit("84268852", { city: "Riverside", building: "RVS" })],
+    log: [],
+    warnings: [],
+  };
+}
+
+const CHECKS: [CriterionCheck["criterion"], boolean | null][] = [
+  ["type", true],
+  ["color", true],
+  ["size", true],
+  ["location", false],
+  ["material", null],
+];
+
+export function candidate(assetId: string, score: number, over: Partial<Candidate> = {}): Candidate {
+  return {
+    existing: unit(assetId),
+    score,
+    checks: CHECKS.map(([criterion, match]) => ({
+      criterion,
+      weight: 10,
+      evaluable: match !== null,
+      match,
+      existing: criterion === "location" ? "Riverside" : "x",
+      incoming: criterion === "location" ? "LKS" : "x",
+    })),
+    hard_ok: true,
+    qr_match: false,
+    paired_row: null,
+    ...over,
+  };
+}
+
+export function sessionState(over: Partial<SessionState> = {}): SessionState {
+  return { session_id: "s1", original: null, incoming: null, matched: false, ...over };
 }

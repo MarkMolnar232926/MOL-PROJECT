@@ -17,7 +17,8 @@ from scipy.optimize import linear_sum_assignment
 
 from .config import AppConfig, TypeRule, default_config
 from .errors import ReconError
-from .loader import EXCEL_ROW, SheetData
+from .intake import find_duplicate_rows
+from .loader import EXCEL_ROW
 from .messages import Note, note
 from .models import (
     Confidence,
@@ -61,20 +62,7 @@ def classify(item_name: str | None, description: str | None, rules: list[TypeRul
     return None
 
 
-def find_duplicates(sheet: SheetData) -> dict[int, int]:
-    """Map excel_row -> excel_row of the first identical row (all original columns equal)."""
-    first_seen: dict[tuple, int] = {}
-    dup_of: dict[int, int] = {}
-    cols = [c for c in sheet.frame.columns if c != EXCEL_ROW]
-    for values, excel_row in zip(
-        sheet.frame[cols].itertuples(index=False, name=None), sheet.frame[EXCEL_ROW], strict=True
-    ):
-        key = tuple(None if pd.isna(v) else v for v in values)
-        if key in first_seen:
-            dup_of[int(excel_row)] = first_seen[key]
-        else:
-            first_seen[key] = int(excel_row)
-    return dup_of
+find_duplicates = find_duplicate_rows
 
 
 # --- matching core ----------------------------------------------------------------------------

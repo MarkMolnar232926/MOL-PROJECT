@@ -74,6 +74,17 @@ EN: dict[str, Callable[[dict[str, Param]], str]] = {
         f"Manual decision for SAP row {p['sap_row']} was dropped: "
         "that row no longer needs a decision."
     ),
+    # score-based matching (v2)
+    "incoming_duplicate": lambda p: f"Identical to row {p['first']} of the incoming list.",
+    "no_candidate": lambda p: (
+        f"No free existing unit of this type, colour and size reaches {p['threshold']:g}%."
+    ),
+    "tie_newest": lambda p: (
+        "Several existing units fit equally well; the one with the newest activation date "
+        "was chosen."
+    ),
+    "released_by_swap": lambda p: f"Its automatic pair ({p['asset_id']}) was given to another row.",
+    "defective_chosen": lambda p: "The chosen unit is marked defective.",
     # pair flags
     "location_mismatch": lambda p: f"Physical says {p['city']}, SAP says {p['building']}.",
     "deactivated": lambda p: "Deactivated but present in SAP (has a deactivation date).",

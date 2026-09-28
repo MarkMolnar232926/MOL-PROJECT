@@ -353,14 +353,17 @@ def test_every_message_has_a_code_params_and_english_text():
 
 
 def test_web_app_translates_every_message_code():
-    """Each server message code needs a text in every web-app language."""
+    """Each server message code needs a text in the web app's English file.
+
+    Other languages start from the English texts (``...en.messages``); the frontend test
+    ``i18n.test.tsx`` checks that every language has exactly the same codes."""
     import re
 
     from conftest import REPO_ROOT
 
     from recon.messages import EN
 
-    for lang in ("en", "hu"):
+    for lang in ("en",):
         source = (REPO_ROOT / "frontend" / "src" / "i18n" / f"{lang}.ts").read_text("utf-8")
         start = source.index("  messages: {")
         end = re.compile(r"^  \}", re.MULTILINE).search(source, start).start()

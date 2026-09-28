@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Inventory Reconciliation API",
-    "description": "Match a physical stocktake against an SAP export and fill in Asset IDs.",
-    "version": "0.4.0"
+    "description": "Fill in the Asset IDs of an incoming furniture list from the original inventory. The original inventory is only read.",
+    "version": "0.5.0"
   },
   "paths": {
     "/api/health": {
@@ -44,30 +44,52 @@
     },
     "/api/sessions": {
       "post": {
-        "summary": "Upload one workbook, or physical + SAP files, and run matching",
+        "summary": "Create Session",
+        "description": "A new, empty session. Upload the original inventory next.",
         "operationId": "create_session_api_sessions_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_create_session_api_sessions_post"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionCreated"
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{session_id}": {
+      "get": {
+        "summary": "Get State",
+        "description": "Which steps are done: the uploads (with their summaries) and whether matching ran.",
+        "operationId": "get_state_api_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
                 }
               }
             }
           },
           "404": {
-            "description": "Unknown session or tie group",
+            "description": "Unknown session or row",
             "content": {
               "application/json": {
                 "schema": {
@@ -78,6 +100,196 @@
           },
           "422": {
             "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Session",
+        "operationId": "delete_session_api_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown session or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{session_id}/original": {
+      "post": {
+        "summary": "Step 1: upload the original inventory (read only, never modified)",
+        "description": "Uploading again replaces the original inventory and discards the incoming list and\nevery decision (the UI asks for confirmation first). A failed upload changes nothing.",
+        "operationId": "upload_original_api_sessions__session_id__original_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_original_api_sessions__session_id__original_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OriginalUploaded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown session or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A previous step is not done yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{session_id}/incoming": {
+      "post": {
+        "summary": "Step 2: upload the incoming furniture list; matching runs right away",
+        "description": "409 until the original inventory is uploaded. Uploading again replaces the list and\ndiscards every decision.",
+        "operationId": "upload_incoming_api_sessions__session_id__incoming_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_incoming_api_sessions__session_id__incoming_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomingUploaded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown session or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A previous step is not done yet",
             "content": {
               "application/json": {
                 "schema": {
@@ -102,6 +314,7 @@
     "/api/sessions/{session_id}/result": {
       "get": {
         "summary": "Get Result",
+        "description": "Summary, the status of every incoming row, warnings, unpaired units, decision log.",
         "operationId": "get_result_api_sessions__session_id__result_get",
         "parameters": [
           {
@@ -126,7 +339,7 @@
             }
           },
           "404": {
-            "description": "Unknown session or tie group",
+            "description": "Unknown session or row",
             "content": {
               "application/json": {
                 "schema": {
@@ -144,22 +357,160 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "A previous step is not done yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/sessions/{session_id}/ties/{group_id}": {
-      "put": {
-        "summary": "Decide Tie",
-        "operationId": "decide_tie_api_sessions__session_id__ties__group_id__put",
+    "/api/sessions/{session_id}/incoming/{row}/candidates": {
+      "get": {
+        "summary": "Get Candidates",
+        "description": "Existing units for one incoming row, best first (a QR-code match always leads).",
+        "operationId": "get_candidates_api_sessions__session_id__incoming__row__candidates_get",
         "parameters": [
           {
-            "name": "group_id",
+            "name": "row",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row"
+            }
+          },
+          {
+            "name": "session_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Group Id"
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "include_paired",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also units assigned to other rows",
+              "default": false,
+              "title": "Include Paired"
+            },
+            "description": "Also units assigned to other rows"
+          },
+          {
+            "name": "include_other_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also units of other types",
+              "default": false,
+              "title": "Include Other Types"
+            },
+            "description": "Also units of other types"
+          },
+          {
+            "name": "include_defective",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also defective units",
+              "default": false,
+              "title": "Include Defective"
+            },
+            "description": "Also defective units"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search Asset ID, description, custodian",
+              "title": "Q"
+            },
+            "description": "Search Asset ID, description, custodian"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Candidate"
+                  },
+                  "title": "Response Get Candidates Api Sessions  Session Id  Incoming  Row  Candidates Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown session or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A previous step is not done yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{session_id}/incoming/{row}/assignment": {
+      "put": {
+        "summary": "Put Assignment",
+        "description": "Pair the row with a unit, or mark it as having no pair (reason required).\n\nIf the unit belongs to another row the answer is 409 ``swap_required`` describing the\nswap; with ``confirm_swap`` that row is released back to the items to resolve.",
+        "operationId": "put_assignment_api_sessions__session_id__incoming__row__assignment_put",
+        "parameters": [
+          {
+            "name": "row",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row"
             }
           },
           {
@@ -177,7 +528,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TieDecisionRequest"
+                "$ref": "#/components/schemas/AssignmentRequest"
               }
             }
           }
@@ -188,13 +539,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TieGroup"
+                  "$ref": "#/components/schemas/AssignmentResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Unknown session or tie group",
+            "description": "Unknown session or row",
             "content": {
               "application/json": {
                 "schema": {
@@ -205,6 +556,16 @@
           },
           "422": {
             "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Matching has not run, or the unit belongs to another row (code swap_required: repeat with confirm_swap)",
             "content": {
               "application/json": {
                 "schema": {
@@ -216,17 +577,17 @@
         }
       },
       "delete": {
-        "summary": "Reset Tie",
-        "description": "Forget the decisions for this group; its slots go back to the suggestion.",
-        "operationId": "reset_tie_api_sessions__session_id__ties__group_id__delete",
+        "summary": "Delete Assignment",
+        "description": "Back to the automatic suggestion.",
+        "operationId": "delete_assignment_api_sessions__session_id__incoming__row__assignment_delete",
         "parameters": [
           {
-            "name": "group_id",
+            "name": "row",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
-              "title": "Group Id"
+              "type": "integer",
+              "title": "Row"
             }
           },
           {
@@ -237,6 +598,18 @@
               "type": "string",
               "title": "Session Id"
             }
+          },
+          {
+            "name": "confirm_swap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Take back the unit from another row",
+              "default": false,
+              "title": "Confirm Swap"
+            },
+            "description": "Take back the unit from another row"
           }
         ],
         "responses": {
@@ -245,13 +618,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TieGroup"
+                  "$ref": "#/components/schemas/AssignmentResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Unknown session or tie group",
+            "description": "Unknown session or row",
             "content": {
               "application/json": {
                 "schema": {
@@ -262,6 +635,16 @@
           },
           "422": {
             "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Matching has not run, or the unit belongs to another row (code swap_required: repeat with confirm_swap)",
             "content": {
               "application/json": {
                 "schema": {
@@ -276,6 +659,7 @@
     "/api/sessions/{session_id}/export": {
       "get": {
         "summary": "Export",
+        "description": "The incoming file as uploaded, with only its Asset ID cells written. 409 while any\nitem is unresolved. The original inventory is never exported.",
         "operationId": "export_api_sessions__session_id__export_get",
         "parameters": [
           {
@@ -290,13 +674,13 @@
         ],
         "responses": {
           "200": {
-            "description": "The reconciled workbook",
+            "description": "The uploaded incoming workbook with its Asset IDs filled in",
             "content": {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
             }
           },
           "404": {
-            "description": "Unknown session or tie group",
+            "description": "Unknown session or row",
             "content": {
               "application/json": {
                 "schema": {
@@ -314,41 +698,9 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/api/sessions/{session_id}": {
-      "delete": {
-        "summary": "Delete Session",
-        "operationId": "delete_session_api_sessions__session_id__delete",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
-          "404": {
-            "description": "Unknown session or tie group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid input",
+          "409": {
+            "description": "Matching has not run, or items are still unresolved (code unresolved_items)",
             "content": {
               "application/json": {
                 "schema": {
@@ -363,60 +715,185 @@
   },
   "components": {
     "schemas": {
-      "Body_create_session_api_sessions_post": {
+      "AssignmentRequest": {
         "properties": {
-          "workbook": {
+          "asset_id": {
             "anyOf": [
               {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Workbook",
-            "description": "One workbook with both sheets"
+            "title": "Asset Id",
+            "description": "Asset ID from the original inventory; null = the item has no existing pair."
           },
-          "physical": {
+          "reason": {
             "anyOf": [
               {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
+                "$ref": "#/components/schemas/NoMatchReason"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Physical",
-            "description": "Physical_Inventory file"
+            "description": "Required when asset_id is null; 'other' also needs a note."
           },
-          "sap": {
+          "note": {
             "anyOf": [
               {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Sap",
-            "description": "SAP_Export file"
+            "title": "Note"
+          },
+          "confirm_swap": {
+            "type": "boolean",
+            "title": "Confirm Swap",
+            "description": "Take the unit even if another row holds it (that row is released).",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_create_session_api_sessions_post"
-      },
-      "Confidence": {
-        "type": "string",
-        "enum": [
-          "High",
-          "Medium",
-          "Manual",
-          "Needs decision"
+        "required": [
+          "asset_id"
         ],
-        "title": "Confidence"
+        "title": "AssignmentRequest"
+      },
+      "AssignmentResponse": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "released_row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released Row",
+            "description": "Row that lost its unit in a swap and is back among the items to resolve."
+          },
+          "result": {
+            "$ref": "#/components/schemas/SessionResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "released_row",
+          "result"
+        ],
+        "title": "AssignmentResponse"
+      },
+      "Body_upload_incoming_api_sessions__session_id__incoming_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "The incoming furniture list workbook"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet",
+            "description": "Sheet to read; needed if several fit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_incoming_api_sessions__session_id__incoming_post"
+      },
+      "Body_upload_original_api_sessions__session_id__original_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "The original inventory workbook"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet",
+            "description": "Sheet to read; needed if several fit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_original_api_sessions__session_id__original_post"
+      },
+      "Candidate": {
+        "properties": {
+          "existing": {
+            "$ref": "#/components/schemas/ExistingItem"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "hard_ok": {
+            "type": "boolean",
+            "title": "Hard Ok"
+          },
+          "qr_match": {
+            "type": "boolean",
+            "title": "Qr Match"
+          },
+          "paired_row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paired Row"
+          }
+        },
+        "type": "object",
+        "required": [
+          "existing",
+          "score",
+          "checks",
+          "hard_ok",
+          "qr_match",
+          "paired_row"
+        ],
+        "title": "Candidate"
       },
       "ConfigResponse": {
         "properties": {
@@ -438,8 +915,8 @@
             "type": "array",
             "title": "Locations"
           },
-          "cost_weights": {
-            "$ref": "#/components/schemas/CostWeights"
+          "scoring": {
+            "$ref": "#/components/schemas/ScoringConfig"
           },
           "excluded_statuses": {
             "items": {
@@ -454,109 +931,47 @@
           "rules_version",
           "type_rules",
           "locations",
-          "cost_weights",
+          "scoring",
           "excluded_statuses"
         ],
         "title": "ConfigResponse"
       },
-      "CostWeights": {
-        "properties": {
-          "year_gap": {
-            "type": "number",
-            "title": "Year Gap",
-            "default": 1000
-          },
-          "location_mismatch": {
-            "type": "number",
-            "title": "Location Mismatch",
-            "default": 100
-          },
-          "fifo_rank": {
-            "type": "number",
-            "title": "Fifo Rank",
-            "default": 0.001
-          }
-        },
-        "type": "object",
-        "title": "CostWeights"
-      },
-      "DetectedSheet": {
-        "properties": {
-          "source": {
-            "type": "string",
-            "enum": [
-              "physical",
-              "sap"
-            ],
-            "title": "Source"
-          },
-          "file_name": {
-            "type": "string",
-            "title": "File Name"
-          },
-          "sheet_name": {
-            "type": "string",
-            "title": "Sheet Name"
-          },
-          "detected_by": {
-            "type": "string",
-            "enum": [
-              "sheet_name",
-              "header_signature"
-            ],
-            "title": "Detected By"
-          },
-          "row_count": {
-            "type": "integer",
-            "title": "Row Count"
-          },
-          "missing_optional_columns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Missing Optional Columns"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source",
-          "file_name",
-          "sheet_name",
-          "detected_by",
-          "row_count",
-          "missing_optional_columns"
+      "Criterion": {
+        "type": "string",
+        "enum": [
+          "type",
+          "color",
+          "size",
+          "location",
+          "material"
         ],
-        "title": "DetectedSheet"
+        "title": "Criterion"
       },
-      "Discrepancy": {
+      "CriterionCheck": {
         "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/DiscrepancyKind"
+          "criterion": {
+            "$ref": "#/components/schemas/Criterion"
           },
-          "physical_row": {
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "evaluable": {
+            "type": "boolean",
+            "title": "Evaluable"
+          },
+          "match": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "boolean"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Physical Row"
+            "title": "Match"
           },
-          "sap_row": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sap Row"
-          },
-          "asset_id": {
+          "existing": {
             "anyOf": [
               {
                 "type": "string"
@@ -565,59 +980,48 @@
                 "type": "null"
               }
             ],
-            "title": "Asset Id"
+            "title": "Existing"
           },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "params": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Params"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
+          "incoming": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incoming"
           }
         },
         "type": "object",
         "required": [
-          "kind",
-          "code",
-          "message"
+          "criterion",
+          "weight",
+          "evaluable",
+          "match",
+          "existing",
+          "incoming"
         ],
-        "title": "Discrepancy"
+        "title": "CriterionCheck"
       },
-      "DiscrepancyKind": {
-        "type": "string",
-        "enum": [
-          "Physical only",
-          "SAP only",
-          "Duplicate",
-          "Location mismatch",
-          "Unclassified",
-          "Unresolved tie",
-          "Deactivated warning",
-          "Year gap",
-          "Data quality"
+      "DuplicateRow": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "duplicate_of": {
+            "type": "integer",
+            "title": "Duplicate Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "duplicate_of"
         ],
-        "title": "DiscrepancyKind"
+        "title": "DuplicateRow"
       },
       "ErrorBody": {
         "properties": {
@@ -658,220 +1062,14 @@
         ],
         "title": "ErrorResponse"
       },
-      "HealthResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "HealthResponse"
-      },
-      "Location": {
-        "properties": {
-          "city": {
-            "type": "string",
-            "title": "City"
-          },
-          "building": {
-            "type": "string",
-            "title": "Building"
-          },
-          "site_code": {
-            "type": "string",
-            "title": "Site Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "city",
-          "building",
-          "site_code"
-        ],
-        "title": "Location"
-      },
-      "ManualDecision": {
-        "properties": {
-          "group_id": {
-            "type": "string",
-            "title": "Group Id"
-          },
-          "sap_row": {
-            "type": "integer",
-            "title": "Sap Row"
-          },
-          "asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Asset Id"
-          },
-          "proposed_asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed Asset Id"
-          },
-          "decided_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Decided At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "group_id",
-          "sap_row",
-          "asset_id",
-          "proposed_asset_id",
-          "decided_at"
-        ],
-        "title": "ManualDecision"
-      },
-      "MatchStatus": {
-        "type": "string",
-        "enum": [
-          "Matched",
-          "Matched \u2013 location mismatch",
-          "Needs decision",
-          "Manually resolved",
-          "Physical only",
-          "SAP only",
-          "Defective \u2013 excluded",
-          "Duplicate entry",
-          "Unclassified"
-        ],
-        "title": "MatchStatus"
-      },
-      "Note": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "params": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Params"
-          },
-          "text": {
-            "type": "string",
-            "title": "Text"
-          }
-        },
-        "type": "object",
-        "required": [
-          "code",
-          "text"
-        ],
-        "title": "Note",
-        "description": "One message: ``code`` + ``params`` for translation, ``text`` in English."
-      },
-      "Pair": {
-        "properties": {
-          "sap_row": {
-            "type": "integer",
-            "title": "Sap Row"
-          },
-          "physical_row": {
-            "type": "integer",
-            "title": "Physical Row"
-          },
-          "asset_id": {
-            "type": "string",
-            "title": "Asset Id"
-          },
-          "confidence": {
-            "$ref": "#/components/schemas/Confidence"
-          },
-          "location_mismatch": {
-            "type": "boolean",
-            "title": "Location Mismatch"
-          },
-          "year_gap": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year Gap"
-          },
-          "tie_group_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tie Group Id"
-          },
-          "provisional": {
-            "type": "boolean",
-            "title": "Provisional",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "sap_row",
-          "physical_row",
-          "asset_id",
-          "confidence",
-          "location_mismatch",
-          "year_gap"
-        ],
-        "title": "Pair",
-        "description": "A physical\u2194SAP pairing, including provisional tie suggestions."
-      },
-      "PhysicalRow": {
+      "ExistingItem": {
         "properties": {
           "excel_row": {
             "type": "integer",
             "title": "Excel Row"
           },
           "asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Asset Id"
           },
           "item_name": {
@@ -895,6 +1093,17 @@
               }
             ],
             "title": "Description"
+          },
+          "sap_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sap Type"
           },
           "color": {
             "anyOf": [
@@ -928,6 +1137,13 @@
               }
             ],
             "title": "Size Word"
+          },
+          "materials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materials"
           },
           "city": {
             "anyOf": [
@@ -986,17 +1202,6 @@
             ],
             "title": "Deactivation Date"
           },
-          "gross_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gross Value"
-          },
           "status": {
             "anyOf": [
               {
@@ -1008,69 +1213,9 @@
             ],
             "title": "Status"
           },
-          "sap_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sap Type"
-          },
-          "match_status": {
-            "$ref": "#/components/schemas/MatchStatus"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Confidence"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "matched_sap_row": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Matched Sap Row"
-          },
-          "tie_group_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tie Group Id"
-          },
-          "duplicate_of": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duplicate Of"
-          },
-          "notes": {
-            "items": {
-              "$ref": "#/components/schemas/Note"
-            },
-            "type": "array",
-            "title": "Notes"
+          "defective": {
+            "type": "boolean",
+            "title": "Defective"
           }
         },
         "type": "object",
@@ -1079,26 +1224,73 @@
           "asset_id",
           "item_name",
           "description",
+          "sap_type",
           "color",
           "width_cm",
           "size_word",
+          "materials",
           "city",
           "building",
           "custodian",
           "activation_date",
           "deactivation_date",
-          "gross_value",
           "status",
-          "sap_type",
-          "match_status"
+          "defective"
         ],
-        "title": "PhysicalRow"
+        "title": "ExistingItem",
+        "description": "A unit of the original inventory (one per Asset ID)."
       },
-      "SapRow": {
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "IncomingItem": {
         "properties": {
           "excel_row": {
             "type": "integer",
             "title": "Excel Row"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "asset_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Group"
+          },
+          "asset_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Category"
           },
           "item_name": {
             "anyOf": [
@@ -1144,6 +1336,28 @@
             ],
             "title": "Width Cm"
           },
+          "height_cm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Cm"
+          },
+          "depth_cm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Cm"
+          },
           "serial_no": {
             "anyOf": [
               {
@@ -1154,39 +1368,6 @@
               }
             ],
             "title": "Serial No"
-          },
-          "serial_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Serial Year"
-          },
-          "building": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Building"
-          },
-          "city": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "City"
           },
           "remarks": {
             "anyOf": [
@@ -1210,7 +1391,7 @@
             ],
             "title": "Qr Code"
           },
-          "asset_id": {
+          "building": {
             "anyOf": [
               {
                 "type": "string"
@@ -1219,9 +1400,9 @@
                 "type": "null"
               }
             ],
-            "title": "Asset Id"
+            "title": "Building"
           },
-          "suggested_asset_id": {
+          "city": {
             "anyOf": [
               {
                 "type": "string"
@@ -1230,42 +1411,7 @@
                 "type": "null"
               }
             ],
-            "title": "Suggested Asset Id"
-          },
-          "match_status": {
-            "$ref": "#/components/schemas/MatchStatus"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Confidence"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "matched_physical_row": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Matched Physical Row"
-          },
-          "tie_group_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tie Group Id"
+            "title": "City"
           },
           "duplicate_of": {
             "anyOf": [
@@ -1277,6 +1423,122 @@
               }
             ],
             "title": "Duplicate Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "excel_row",
+          "asset_id",
+          "asset_group",
+          "asset_category",
+          "item_name",
+          "color",
+          "material",
+          "width_cm",
+          "height_cm",
+          "depth_cm",
+          "serial_no",
+          "remarks",
+          "qr_code",
+          "building",
+          "city",
+          "duplicate_of"
+        ],
+        "title": "IncomingItem"
+      },
+      "IncomingResult": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/IncomingItem"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RowStatus"
+          },
+          "resolved": {
+            "type": "boolean",
+            "title": "Resolved"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "existing_row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Row"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "location_mismatch": {
+            "type": "boolean",
+            "title": "Location Mismatch",
+            "default": false
+          },
+          "tie_resolved": {
+            "type": "boolean",
+            "title": "Tie Resolved",
+            "default": false
+          },
+          "auto_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Asset Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "notes": {
             "items": {
@@ -1288,101 +1550,96 @@
         },
         "type": "object",
         "required": [
-          "excel_row",
-          "item_name",
-          "color",
-          "material",
-          "width_cm",
-          "serial_no",
-          "serial_year",
-          "building",
-          "city",
-          "remarks",
-          "qr_code",
+          "item",
+          "status",
+          "resolved",
           "asset_id",
-          "match_status"
+          "existing_row",
+          "score"
         ],
-        "title": "SapRow"
+        "title": "IncomingResult"
       },
-      "SessionCreated": {
+      "IncomingSummary": {
         "properties": {
-          "session_id": {
-            "type": "string",
-            "title": "Session Id"
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
           },
-          "detected": {
+          "locations": {
             "items": {
-              "$ref": "#/components/schemas/DetectedSheet"
+              "$ref": "#/components/schemas/LocationCount"
             },
             "type": "array",
-            "title": "Detected"
+            "title": "Locations"
           },
-          "warnings": {
+          "item_types": {
+            "type": "integer",
+            "title": "Item Types"
+          },
+          "duplicate_rows": {
             "items": {
-              "$ref": "#/components/schemas/Note"
+              "$ref": "#/components/schemas/DuplicateRow"
             },
             "type": "array",
-            "title": "Warnings"
+            "title": "Duplicate Rows"
           },
-          "summary": {
-            "$ref": "#/components/schemas/Summary"
+          "prefilled_asset_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Prefilled Asset Ids"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/RowIssue"
+            },
+            "type": "array",
+            "title": "Issues"
           }
         },
         "type": "object",
         "required": [
-          "session_id",
-          "detected",
-          "warnings",
+          "rows",
+          "locations",
+          "item_types",
+          "duplicate_rows",
+          "prefilled_asset_ids",
+          "issues"
+        ],
+        "title": "IncomingSummary"
+      },
+      "IncomingUpload": {
+        "properties": {
+          "sheet": {
+            "$ref": "#/components/schemas/SheetInfo"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/IncomingSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheet",
           "summary"
         ],
-        "title": "SessionCreated"
+        "title": "IncomingUpload"
       },
-      "SessionResult": {
+      "IncomingUploaded": {
         "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "incoming": {
+            "$ref": "#/components/schemas/IncomingUpload"
+          },
+          "discarded_decisions": {
+            "type": "boolean",
+            "title": "Discarded Decisions"
+          },
           "summary": {
-            "$ref": "#/components/schemas/Summary"
-          },
-          "physical_rows": {
-            "items": {
-              "$ref": "#/components/schemas/PhysicalRow"
-            },
-            "type": "array",
-            "title": "Physical Rows"
-          },
-          "sap_rows": {
-            "items": {
-              "$ref": "#/components/schemas/SapRow"
-            },
-            "type": "array",
-            "title": "Sap Rows"
-          },
-          "pairs": {
-            "items": {
-              "$ref": "#/components/schemas/Pair"
-            },
-            "type": "array",
-            "title": "Pairs"
-          },
-          "tie_groups": {
-            "items": {
-              "$ref": "#/components/schemas/TieGroup"
-            },
-            "type": "array",
-            "title": "Tie Groups"
-          },
-          "discrepancies": {
-            "items": {
-              "$ref": "#/components/schemas/Discrepancy"
-            },
-            "type": "array",
-            "title": "Discrepancies"
-          },
-          "decisions": {
-            "items": {
-              "$ref": "#/components/schemas/ManualDecision"
-            },
-            "type": "array",
-            "title": "Decisions"
+            "$ref": "#/components/schemas/MatchSummary"
           },
           "warnings": {
             "items": {
@@ -1390,432 +1647,645 @@
             },
             "type": "array",
             "title": "Warnings"
-          },
-          "session_id": {
-            "type": "string",
-            "title": "Session Id"
-          },
-          "detected": {
-            "items": {
-              "$ref": "#/components/schemas/DetectedSheet"
-            },
-            "type": "array",
-            "title": "Detected"
           }
         },
         "type": "object",
         "required": [
-          "summary",
-          "physical_rows",
-          "sap_rows",
-          "pairs",
-          "tie_groups",
-          "discrepancies",
-          "decisions",
-          "warnings",
           "session_id",
-          "detected"
+          "incoming",
+          "discarded_decisions",
+          "summary",
+          "warnings"
         ],
-        "title": "SessionResult"
+        "title": "IncomingUploaded"
       },
-      "Summary": {
+      "Location": {
         "properties": {
-          "physical_total": {
-            "type": "integer",
-            "title": "Physical Total"
+          "city": {
+            "type": "string",
+            "title": "City"
           },
-          "sap_total": {
-            "type": "integer",
-            "title": "Sap Total"
+          "building": {
+            "type": "string",
+            "title": "Building"
           },
-          "pairs": {
-            "type": "integer",
-            "title": "Pairs"
+          "site_code": {
+            "type": "string",
+            "title": "Site Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "city",
+          "building",
+          "site_code"
+        ],
+        "title": "Location"
+      },
+      "LocationCount": {
+        "properties": {
+          "location": {
+            "type": "string",
+            "title": "Location"
           },
-          "physical_status_counts": {
+          "building": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location",
+          "building",
+          "rows"
+        ],
+        "title": "LocationCount"
+      },
+      "LogAction": {
+        "type": "string",
+        "enum": [
+          "assign",
+          "no_match",
+          "reset",
+          "released"
+        ],
+        "title": "LogAction"
+      },
+      "LogEntry": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "action": {
+            "$ref": "#/components/schemas/LogAction"
+          },
+          "old_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Asset Id"
+          },
+          "new_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Asset Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "row",
+          "action",
+          "old_asset_id",
+          "new_asset_id"
+        ],
+        "title": "LogEntry"
+      },
+      "MatchSummary": {
+        "properties": {
+          "incoming_rows": {
+            "type": "integer",
+            "title": "Incoming Rows"
+          },
+          "existing_units": {
+            "type": "integer",
+            "title": "Existing Units"
+          },
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved"
+          },
+          "unresolved": {
+            "type": "integer",
+            "title": "Unresolved"
+          },
+          "status_counts": {
             "additionalProperties": {
               "type": "integer"
             },
             "type": "object",
-            "title": "Physical Status Counts"
-          },
-          "sap_status_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Sap Status Counts"
-          },
-          "confidence_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Confidence Counts"
+            "title": "Status Counts"
           },
           "location_mismatches": {
             "type": "integer",
             "title": "Location Mismatches"
           },
-          "tie_groups": {
+          "tie_resolved": {
             "type": "integer",
-            "title": "Tie Groups"
+            "title": "Tie Resolved"
           },
-          "tie_slots": {
+          "unpaired_existing": {
             "type": "integer",
-            "title": "Tie Slots"
+            "title": "Unpaired Existing"
           },
-          "tie_slots_pending": {
-            "type": "integer",
-            "title": "Tie Slots Pending"
+          "auto_match_threshold": {
+            "type": "number",
+            "title": "Auto Match Threshold"
           },
-          "manual_decisions": {
-            "type": "integer",
-            "title": "Manual Decisions"
-          },
-          "rules_version": {
-            "type": "string",
-            "title": "Rules Version"
+          "export_ready": {
+            "type": "boolean",
+            "title": "Export Ready"
           }
         },
         "type": "object",
         "required": [
-          "physical_total",
-          "sap_total",
-          "pairs",
-          "physical_status_counts",
-          "sap_status_counts",
-          "confidence_counts",
+          "incoming_rows",
+          "existing_units",
+          "resolved",
+          "unresolved",
+          "status_counts",
           "location_mismatches",
-          "tie_groups",
-          "tie_slots",
-          "tie_slots_pending",
-          "manual_decisions",
-          "rules_version"
+          "tie_resolved",
+          "unpaired_existing",
+          "auto_match_threshold",
+          "export_ready"
         ],
-        "title": "Summary"
+        "title": "MatchSummary"
       },
-      "TieAssignment": {
-        "properties": {
-          "sap_row": {
-            "type": "integer",
-            "title": "Sap Row"
-          },
-          "physical_asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Physical Asset Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sap_row",
-          "physical_asset_id"
+      "NoMatchReason": {
+        "type": "string",
+        "enum": [
+          "missing_asset",
+          "new_asset",
+          "duplicate_entry",
+          "other"
         ],
-        "title": "TieAssignment"
+        "title": "NoMatchReason"
       },
-      "TieCandidate": {
+      "Note": {
         "properties": {
-          "physical_row": {
-            "type": "integer",
-            "title": "Physical Row"
-          },
-          "asset_id": {
+          "code": {
             "type": "string",
-            "title": "Asset Id"
+            "title": "Code"
           },
-          "activation_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Activation Date"
-          },
-          "city": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "City"
-          },
-          "building": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Building"
-          },
-          "custodian": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Custodian"
-          },
-          "gross_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gross Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "physical_row",
-          "asset_id",
-          "activation_date",
-          "city",
-          "building",
-          "custodian",
-          "gross_value"
-        ],
-        "title": "TieCandidate"
-      },
-      "TieDecisionRequest": {
-        "properties": {
-          "assignments": {
-            "items": {
-              "$ref": "#/components/schemas/TieAssignment"
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
-            "type": "array",
-            "title": "Assignments",
-            "description": "One entry per SAP row to decide; physical_asset_id null = leave unmatched."
+            "type": "object",
+            "title": "Params"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
           }
         },
         "type": "object",
         "required": [
-          "assignments"
+          "code",
+          "text"
         ],
-        "title": "TieDecisionRequest"
+        "title": "Note",
+        "description": "One message: ``code`` + ``params`` for translation, ``text`` in English."
       },
-      "TieGroup": {
+      "OriginalSummary": {
         "properties": {
-          "group_id": {
-            "type": "string",
-            "title": "Group Id"
-          },
-          "sap_type": {
-            "type": "string",
-            "title": "Sap Type"
-          },
-          "color": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Color"
-          },
-          "width_cm": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Width Cm"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
           },
           "locations": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/LocationCount"
             },
             "type": "array",
             "title": "Locations"
           },
-          "physical_rows": {
+          "duplicate_asset_ids": {
+            "items": {
+              "$ref": "#/components/schemas/RepeatedValue"
+            },
+            "type": "array",
+            "title": "Duplicate Asset Ids"
+          },
+          "duplicate_rows": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateRow"
+            },
+            "type": "array",
+            "title": "Duplicate Rows"
+          },
+          "defective_rows": {
             "items": {
               "type": "integer"
             },
             "type": "array",
-            "title": "Physical Rows"
+            "title": "Defective Rows"
           },
-          "sap_rows": {
+          "issues": {
             "items": {
-              "type": "integer"
+              "$ref": "#/components/schemas/RowIssue"
             },
             "type": "array",
-            "title": "Sap Rows"
-          },
-          "candidates": {
-            "items": {
-              "$ref": "#/components/schemas/TieCandidate"
-            },
-            "type": "array",
-            "title": "Candidates"
-          },
-          "slots": {
-            "items": {
-              "$ref": "#/components/schemas/TieSlot"
-            },
-            "type": "array",
-            "title": "Slots"
-          },
-          "proposed_pairs": {
-            "items": {
-              "$ref": "#/components/schemas/TieAssignment"
-            },
-            "type": "array",
-            "title": "Proposed Pairs"
-          },
-          "pending_slots": {
-            "type": "integer",
-            "title": "Pending Slots",
-            "readOnly": true
+            "title": "Issues"
           }
         },
         "type": "object",
         "required": [
-          "group_id",
-          "sap_type",
-          "color",
-          "width_cm",
-          "year",
+          "rows",
           "locations",
-          "physical_rows",
-          "sap_rows",
-          "candidates",
-          "slots",
-          "proposed_pairs",
-          "pending_slots"
+          "duplicate_asset_ids",
+          "duplicate_rows",
+          "defective_rows",
+          "issues"
         ],
-        "title": "TieGroup"
+        "title": "OriginalSummary"
       },
-      "TieSlot": {
+      "OriginalUpload": {
         "properties": {
-          "sap_row": {
-            "type": "integer",
-            "title": "Sap Row"
+          "sheet": {
+            "$ref": "#/components/schemas/SheetInfo"
           },
-          "serial_no": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Serial No"
-          },
-          "building": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Building"
-          },
-          "remarks": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Remarks"
-          },
-          "qr_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Qr Code"
-          },
-          "suggested_asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Suggested Asset Id"
-          },
-          "chosen_asset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Chosen Asset Id"
-          },
-          "decided": {
-            "type": "boolean",
-            "title": "Decided",
-            "default": false
-          },
-          "confidence": {
-            "$ref": "#/components/schemas/Confidence"
+          "summary": {
+            "$ref": "#/components/schemas/OriginalSummary"
           }
         },
         "type": "object",
         "required": [
-          "sap_row",
-          "serial_no",
-          "building",
-          "remarks",
-          "qr_code",
-          "suggested_asset_id",
-          "confidence"
+          "sheet",
+          "summary"
         ],
-        "title": "TieSlot"
+        "title": "OriginalUpload"
+      },
+      "OriginalUploaded": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "original": {
+            "$ref": "#/components/schemas/OriginalUpload"
+          },
+          "discarded_later_steps": {
+            "type": "boolean",
+            "title": "Discarded Later Steps",
+            "description": "True if an incoming list (and its decisions) existed and was discarded."
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "original",
+          "discarded_later_steps"
+        ],
+        "title": "OriginalUploaded"
+      },
+      "RepeatedValue": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "rows": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "rows"
+        ],
+        "title": "RepeatedValue"
+      },
+      "RowIssue": {
+        "properties": {
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "code",
+          "message"
+        ],
+        "title": "RowIssue"
+      },
+      "RowStatus": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "auto_newest",
+          "location_mismatch",
+          "manual",
+          "no_match",
+          "no_candidate",
+          "duplicate"
+        ],
+        "title": "RowStatus",
+        "description": "Status of one incoming row (section 4)."
+      },
+      "ScoringConfig": {
+        "properties": {
+          "weights": {
+            "$ref": "#/components/schemas/ScoringWeights",
+            "default": {
+              "type": 35.0,
+              "color": 15.0,
+              "size": 15.0,
+              "location": 10.0,
+              "material": 10.0
+            }
+          },
+          "auto_match_threshold": {
+            "type": "number",
+            "title": "Auto Match Threshold",
+            "default": 80
+          },
+          "material_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Material Keywords",
+            "default": []
+          },
+          "material_synonyms": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Material Synonyms",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "ScoringConfig"
+      },
+      "ScoringWeights": {
+        "properties": {
+          "type": {
+            "type": "number",
+            "title": "Type",
+            "default": 35
+          },
+          "color": {
+            "type": "number",
+            "title": "Color",
+            "default": 15
+          },
+          "size": {
+            "type": "number",
+            "title": "Size",
+            "default": 15
+          },
+          "location": {
+            "type": "number",
+            "title": "Location",
+            "default": 10
+          },
+          "material": {
+            "type": "number",
+            "title": "Material",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "title": "ScoringWeights"
+      },
+      "SessionResult": {
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/MatchSummary"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/IncomingResult"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "unpaired_existing": {
+            "items": {
+              "$ref": "#/components/schemas/ExistingItem"
+            },
+            "type": "array",
+            "title": "Unpaired Existing"
+          },
+          "log": {
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            },
+            "type": "array",
+            "title": "Log"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary",
+          "rows",
+          "unpaired_existing",
+          "log",
+          "warnings",
+          "session_id"
+        ],
+        "title": "SessionResult"
+      },
+      "SessionState": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "original": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OriginalUpload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "incoming": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncomingUpload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "original",
+          "incoming",
+          "matched"
+        ],
+        "title": "SessionState",
+        "description": "Where a session is in the upload \u2192 match flow."
+      },
+      "SheetInfo": {
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "sheet_name": {
+            "type": "string",
+            "title": "Sheet Name"
+          },
+          "detected_by": {
+            "type": "string",
+            "enum": [
+              "sheet_name",
+              "header_signature",
+              "user_choice"
+            ],
+            "title": "Detected By"
+          },
+          "sheets_available": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sheets Available"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "missing_optional_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Optional Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_name",
+          "sheet_name",
+          "detected_by",
+          "sheets_available",
+          "row_count",
+          "missing_optional_columns"
+        ],
+        "title": "SheetInfo"
       },
       "TypeRule": {
         "properties": {

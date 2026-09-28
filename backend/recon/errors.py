@@ -29,3 +29,15 @@ class SheetDetectionError(ReconError):
 
 class MissingColumnsError(ReconError):
     code = "missing_columns"
+
+
+class SheetChoiceRequiredError(ReconError):
+    """Several sheets fit; the user has to say which one to use."""
+
+    code = "sheet_choice_required"
+
+
+class StepOrderError(ReconError):
+    """A step of the upload flow was attempted before the step it depends on."""
+
+    code = "step_order"

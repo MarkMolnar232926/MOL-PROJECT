@@ -78,22 +78,22 @@ export function DataTable<T extends RowData>({
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
-          aria-label={`${t.results.filter} (${label})`}
-          placeholder={t.results.filter}
+          aria-label={`${t.matching.filter} (${label})`}
+          placeholder={t.matching.filter}
           value={filterValue}
           onChange={(e) => table.setGlobalFilter(e.target.value)}
           className="input w-64"
         />
         {statusOf && (
           <div className="flex items-center gap-2 text-sm">
-            <label htmlFor={statusId}>{t.results.statusFilter}</label>
+            <label htmlFor={statusId}>{t.matching.statusFilter}</label>
             <select
               id={statusId}
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="input"
             >
-              <option value="">{t.results.allStatuses}</option>
+              <option value="">{t.matching.allStatuses}</option>
               {statuses.map((s) => (
                 <option key={s} value={s}>
                   {statusLabel(s)}
@@ -102,7 +102,7 @@ export function DataTable<T extends RowData>({
             </select>
           </div>
         )}
-        <span className="text-sm text-slate-500">{t.results.rowCount(shown.length, data.length)}</span>
+        <span className="text-sm text-slate-500">{t.matching.rowCount(shown.length, data.length)}</span>
       </div>
       <div className="max-h-[60vh] overflow-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full text-sm" aria-label={label}>
@@ -165,7 +165,7 @@ export function DataTable<T extends RowData>({
             ))}
           </tbody>
         </table>
-        {shown.length === 0 && <p className="p-4 text-sm text-slate-500">{t.results.noRows}</p>}
+        {shown.length === 0 && <p className="p-4 text-sm text-slate-500">{t.matching.noRows}</p>}
       </div>
     </div>
   );

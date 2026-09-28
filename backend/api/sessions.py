@@ -12,8 +12,10 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from recon import AppConfig, NormalizedInput, reconcile
-from recon.models import ManualDecision, ReconResult
+from recon import AppConfig
+from recon.errors import StepOrderError
+from recon.intake import SourceUpload
+from recon.matching import Matching
 
 DEFAULT_IDLE_TTL = dt.timedelta(hours=2)
 
@@ -24,23 +26,54 @@ def _now() -> dt.datetime:
 
 @dataclass
 class Session:
+    """One reconciliation: the original inventory, then the incoming list, then decisions.
+
+    The steps build on each other: uploading a new original inventory forgets the incoming
+    list and every decision; uploading a new incoming list forgets the decisions. Matching
+    runs once, when the incoming list arrives; decisions are laid over that result.
+    """
+
     session_id: str
-    data: NormalizedInput
     cfg: AppConfig
-    decisions: list[ManualDecision] = field(default_factory=list)
-    result: ReconResult | None = None
+    original: SourceUpload | None = None
+    incoming: SourceUpload | None = None
+    matching: Matching | None = None
     created_at: dt.datetime = field(default_factory=_now)
     last_access: dt.datetime = field(default_factory=_now)
 
-    def rerun(self) -> ReconResult:
-        """Re-run matching with the current decisions; keep only those that still apply."""
-        self.result = reconcile(self.data, self.cfg, decisions=self.decisions)
-        self.decisions = list(self.result.decisions)
-        return self.result
+    @property
+    def matched(self) -> bool:
+        return self.matching is not None
+
+    def set_original(self, upload: SourceUpload) -> bool:
+        """Replace the original inventory. Returns True if later steps were discarded."""
+        had_later = self.incoming is not None
+        self.original = upload
+        self.incoming = None
+        self.matching = None
+        return had_later
+
+    def set_incoming(self, upload: SourceUpload) -> bool:
+        """Replace the incoming list and run matching. Returns True if decisions were dropped."""
+        if self.original is None:
+            raise StepOrderError(
+                "Upload the original inventory first; the incoming list is matched against it."
+            )
+        had_decisions = bool(self.matching and self.matching.log)
+        self.incoming = upload
+        self.matching = Matching(self.original, upload, self.cfg)
+        return had_decisions
+
+    def require_matching(self) -> Matching:
+        if self.matching is None:
+            raise StepOrderError(
+                "Matching has not run yet: upload the original inventory and the incoming list."
+            )
+        return self.matching
 
 
 class SessionStore(Protocol):
-    def create(self, data: NormalizedInput, cfg: AppConfig) -> Session: ...
+    def create(self, cfg: AppConfig) -> Session: ...
     def get(self, session_id: str) -> Session | None: ...
     def save(self, session: Session) -> None: ...
     def delete(self, session_id: str) -> None: ...
@@ -60,10 +93,10 @@ class InMemorySessionStore:
         for sid in [s for s, v in self._sessions.items() if v.last_access < cutoff]:
             del self._sessions[sid]
 
-    def create(self, data: NormalizedInput, cfg: AppConfig) -> Session:
+    def create(self, cfg: AppConfig) -> Session:
+        """A new, empty session (nothing uploaded yet)."""
         now = self._clock()
-        session = Session(str(uuid.uuid4()), data, cfg, created_at=now, last_access=now)
-        session.rerun()
+        session = Session(str(uuid.uuid4()), cfg, created_at=now, last_access=now)
         with self._lock:
             self._purge()
             self._sessions[session.session_id] = session

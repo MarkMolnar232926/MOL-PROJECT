@@ -79,11 +79,27 @@ class MatchingConfig(BaseModel):
     cost_weights: CostWeights = CostWeights()
 
 
+class ScoringWeights(BaseModel):
+    type: float = 35
+    color: float = 15
+    size: float = 15
+    location: float = 10
+    material: float = 10
+
+
+class ScoringConfig(BaseModel):
+    weights: ScoringWeights = ScoringWeights()
+    auto_match_threshold: float = 80
+    material_keywords: list[str] = []
+    material_synonyms: dict[str, list[str]] = {}
+
+
 class AppConfig(BaseModel):
     columns: ColumnsConfig
     type_rules: TypeRulesConfig
     locations: list[Location]
     matching: MatchingConfig
+    scoring: ScoringConfig = ScoringConfig()
 
     def city_to_building(self) -> dict[str, str]:
         return {loc.city.casefold(): loc.building.upper() for loc in self.locations}
@@ -105,6 +121,7 @@ def load_config(config_dir: str | Path | None = None) -> AppConfig:
         type_rules=TypeRulesConfig.model_validate(_read_yaml(base / "type_rules.yaml")),
         locations=[Location.model_validate(x) for x in _read_yaml(base / "locations.yaml")],
         matching=MatchingConfig.model_validate(_read_yaml(base / "matching.yaml") or {}),
+        scoring=ScoringConfig.model_validate(_read_yaml(base / "scoring.yaml") or {}),
     )
 
 

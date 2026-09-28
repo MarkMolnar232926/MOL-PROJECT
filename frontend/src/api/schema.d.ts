@@ -47,63 +47,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload one workbook, or physical + SAP files, and run matching */
-        post: operations["create_session_api_sessions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sessions/{session_id}/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Result */
-        get: operations["get_result_api_sessions__session_id__result_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sessions/{session_id}/ties/{group_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Decide Tie */
-        put: operations["decide_tie_api_sessions__session_id__ties__group_id__put"];
-        post?: never;
         /**
-         * Reset Tie
-         * @description Forget the decisions for this group; its slots go back to the suggestion.
+         * Create Session
+         * @description A new, empty session. Upload the original inventory next.
          */
-        delete: operations["reset_tie_api_sessions__session_id__ties__group_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sessions/{session_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export */
-        get: operations["export_api_sessions__session_id__export_get"];
-        put?: never;
-        post?: never;
+        post: operations["create_session_api_sessions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -117,7 +65,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get State
+         * @description Which steps are done: the uploads (with their summaries) and whether matching ran.
+         */
+        get: operations["get_state_api_sessions__session_id__get"];
         put?: never;
         post?: never;
         /** Delete Session */
@@ -127,33 +79,209 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Step 1: upload the original inventory (read only, never modified)
+         * @description Uploading again replaces the original inventory and discards the incoming list and
+         *     every decision (the UI asks for confirmation first). A failed upload changes nothing.
+         */
+        post: operations["upload_original_api_sessions__session_id__original_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/incoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Step 2: upload the incoming furniture list; matching runs right away
+         * @description 409 until the original inventory is uploaded. Uploading again replaces the list and
+         *     discards every decision.
+         */
+        post: operations["upload_incoming_api_sessions__session_id__incoming_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Result
+         * @description Summary, the status of every incoming row, warnings, unpaired units, decision log.
+         */
+        get: operations["get_result_api_sessions__session_id__result_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/incoming/{row}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Candidates
+         * @description Existing units for one incoming row, best first (a QR-code match always leads).
+         */
+        get: operations["get_candidates_api_sessions__session_id__incoming__row__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/incoming/{row}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Assignment
+         * @description Pair the row with a unit, or mark it as having no pair (reason required).
+         *
+         *     If the unit belongs to another row the answer is 409 ``swap_required`` describing the
+         *     swap; with ``confirm_swap`` that row is released back to the items to resolve.
+         */
+        put: operations["put_assignment_api_sessions__session_id__incoming__row__assignment_put"];
+        post?: never;
+        /**
+         * Delete Assignment
+         * @description Back to the automatic suggestion.
+         */
+        delete: operations["delete_assignment_api_sessions__session_id__incoming__row__assignment_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export
+         * @description The incoming file as uploaded, with only its Asset ID cells written. 409 while any
+         *     item is unresolved. The original inventory is never exported.
+         */
+        get: operations["export_api_sessions__session_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_create_session_api_sessions_post */
-        Body_create_session_api_sessions_post: {
+        /** AssignmentRequest */
+        AssignmentRequest: {
             /**
-             * Workbook
-             * @description One workbook with both sheets
+             * Asset Id
+             * @description Asset ID from the original inventory; null = the item has no existing pair.
              */
-            workbook?: string | null;
+            asset_id: string | null;
+            /** @description Required when asset_id is null; 'other' also needs a note. */
+            reason?: components["schemas"]["NoMatchReason"] | null;
+            /** Note */
+            note?: string | null;
             /**
-             * Physical
-             * @description Physical_Inventory file
+             * Confirm Swap
+             * @description Take the unit even if another row holds it (that row is released).
+             * @default false
              */
-            physical?: string | null;
-            /**
-             * Sap
-             * @description SAP_Export file
-             */
-            sap?: string | null;
+            confirm_swap: boolean;
         };
-        /**
-         * Confidence
-         * @enum {string}
-         */
-        Confidence: "High" | "Medium" | "Manual" | "Needs decision";
+        /** AssignmentResponse */
+        AssignmentResponse: {
+            /** Row */
+            row: number;
+            /**
+             * Released Row
+             * @description Row that lost its unit in a swap and is back among the items to resolve.
+             */
+            released_row: number | null;
+            result: components["schemas"]["SessionResult"];
+        };
+        /** Body_upload_incoming_api_sessions__session_id__incoming_post */
+        Body_upload_incoming_api_sessions__session_id__incoming_post: {
+            /**
+             * File
+             * @description The incoming furniture list workbook
+             */
+            file: string;
+            /**
+             * Sheet
+             * @description Sheet to read; needed if several fit
+             */
+            sheet?: string | null;
+        };
+        /** Body_upload_original_api_sessions__session_id__original_post */
+        Body_upload_original_api_sessions__session_id__original_post: {
+            /**
+             * File
+             * @description The original inventory workbook
+             */
+            file: string;
+            /**
+             * Sheet
+             * @description Sheet to read; needed if several fit
+             */
+            sheet?: string | null;
+        };
+        /** Candidate */
+        Candidate: {
+            existing: components["schemas"]["ExistingItem"];
+            /** Score */
+            score: number;
+            /** Checks */
+            checks: components["schemas"]["CriterionCheck"][];
+            /** Hard Ok */
+            hard_ok: boolean;
+            /** Qr Match */
+            qr_match: boolean;
+            /** Paired Row */
+            paired_row: number | null;
+        };
         /** ConfigResponse */
         ConfigResponse: {
             /** Rules Version */
@@ -162,72 +290,36 @@ export interface components {
             type_rules: components["schemas"]["TypeRule"][];
             /** Locations */
             locations: components["schemas"]["Location"][];
-            cost_weights: components["schemas"]["CostWeights"];
+            scoring: components["schemas"]["ScoringConfig"];
             /** Excluded Statuses */
             excluded_statuses: string[];
         };
-        /** CostWeights */
-        CostWeights: {
-            /**
-             * Year Gap
-             * @default 1000
-             */
-            year_gap: number;
-            /**
-             * Location Mismatch
-             * @default 100
-             */
-            location_mismatch: number;
-            /**
-             * Fifo Rank
-             * @default 0.001
-             */
-            fifo_rank: number;
-        };
-        /** DetectedSheet */
-        DetectedSheet: {
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "physical" | "sap";
-            /** File Name */
-            file_name: string;
-            /** Sheet Name */
-            sheet_name: string;
-            /**
-             * Detected By
-             * @enum {string}
-             */
-            detected_by: "sheet_name" | "header_signature";
-            /** Row Count */
-            row_count: number;
-            /** Missing Optional Columns */
-            missing_optional_columns: string[];
-        };
-        /** Discrepancy */
-        Discrepancy: {
-            kind: components["schemas"]["DiscrepancyKind"];
-            /** Physical Row */
-            physical_row?: number | null;
-            /** Sap Row */
-            sap_row?: number | null;
-            /** Asset Id */
-            asset_id?: string | null;
-            /** Code */
-            code: string;
-            /** Params */
-            params?: {
-                [key: string]: string | number | null;
-            };
-            /** Message */
-            message: string;
-        };
         /**
-         * DiscrepancyKind
+         * Criterion
          * @enum {string}
          */
-        DiscrepancyKind: "Physical only" | "SAP only" | "Duplicate" | "Location mismatch" | "Unclassified" | "Unresolved tie" | "Deactivated warning" | "Year gap" | "Data quality";
+        Criterion: "type" | "color" | "size" | "location" | "material";
+        /** CriterionCheck */
+        CriterionCheck: {
+            criterion: components["schemas"]["Criterion"];
+            /** Weight */
+            weight: number;
+            /** Evaluable */
+            evaluable: boolean;
+            /** Match */
+            match: boolean | null;
+            /** Existing */
+            existing: string | null;
+            /** Incoming */
+            incoming: string | null;
+        };
+        /** DuplicateRow */
+        DuplicateRow: {
+            /** Row */
+            row: number;
+            /** Duplicate Of */
+            duplicate_of: number;
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -246,10 +338,146 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * ExistingItem
+         * @description A unit of the original inventory (one per Asset ID).
+         */
+        ExistingItem: {
+            /** Excel Row */
+            excel_row: number;
+            /** Asset Id */
+            asset_id: string;
+            /** Item Name */
+            item_name: string | null;
+            /** Description */
+            description: string | null;
+            /** Sap Type */
+            sap_type: string | null;
+            /** Color */
+            color: string | null;
+            /** Width Cm */
+            width_cm: number | null;
+            /** Size Word */
+            size_word: string | null;
+            /** Materials */
+            materials: string[];
+            /** City */
+            city: string | null;
+            /** Building */
+            building: string | null;
+            /** Custodian */
+            custodian: string | null;
+            /** Activation Date */
+            activation_date: string | null;
+            /** Deactivation Date */
+            deactivation_date: string | null;
+            /** Status */
+            status: string | null;
+            /** Defective */
+            defective: boolean;
+        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
             status: string;
+        };
+        /** IncomingItem */
+        IncomingItem: {
+            /** Excel Row */
+            excel_row: number;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Asset Group */
+            asset_group: string | null;
+            /** Asset Category */
+            asset_category: string | null;
+            /** Item Name */
+            item_name: string | null;
+            /** Color */
+            color: string | null;
+            /** Material */
+            material: string | null;
+            /** Width Cm */
+            width_cm: number | null;
+            /** Height Cm */
+            height_cm: number | null;
+            /** Depth Cm */
+            depth_cm: number | null;
+            /** Serial No */
+            serial_no: string | null;
+            /** Remarks */
+            remarks: string | null;
+            /** Qr Code */
+            qr_code: string | null;
+            /** Building */
+            building: string | null;
+            /** City */
+            city: string | null;
+            /** Duplicate Of */
+            duplicate_of: number | null;
+        };
+        /** IncomingResult */
+        IncomingResult: {
+            item: components["schemas"]["IncomingItem"];
+            status: components["schemas"]["RowStatus"];
+            /** Resolved */
+            resolved: boolean;
+            /** Asset Id */
+            asset_id: string | null;
+            /** Existing Row */
+            existing_row: number | null;
+            /** Score */
+            score: number | null;
+            /** Checks */
+            checks?: components["schemas"]["CriterionCheck"][];
+            /**
+             * Location Mismatch
+             * @default false
+             */
+            location_mismatch: boolean;
+            /**
+             * Tie Resolved
+             * @default false
+             */
+            tie_resolved: boolean;
+            /** Auto Asset Id */
+            auto_asset_id?: string | null;
+            reason?: components["schemas"]["NoMatchReason"] | null;
+            /** Note */
+            note?: string | null;
+            /** Notes */
+            notes?: components["schemas"]["Note"][];
+        };
+        /** IncomingSummary */
+        IncomingSummary: {
+            /** Rows */
+            rows: number;
+            /** Locations */
+            locations: components["schemas"]["LocationCount"][];
+            /** Item Types */
+            item_types: number;
+            /** Duplicate Rows */
+            duplicate_rows: components["schemas"]["DuplicateRow"][];
+            /** Prefilled Asset Ids */
+            prefilled_asset_ids: number[];
+            /** Issues */
+            issues: components["schemas"]["RowIssue"][];
+        };
+        /** IncomingUpload */
+        IncomingUpload: {
+            sheet: components["schemas"]["SheetInfo"];
+            summary: components["schemas"]["IncomingSummary"];
+        };
+        /** IncomingUploaded */
+        IncomingUploaded: {
+            /** Session Id */
+            session_id: string;
+            incoming: components["schemas"]["IncomingUpload"];
+            /** Discarded Decisions */
+            discarded_decisions: boolean;
+            summary: components["schemas"]["MatchSummary"];
+            /** Warnings */
+            warnings: components["schemas"]["Note"][];
         };
         /** Location */
         Location: {
@@ -260,27 +488,68 @@ export interface components {
             /** Site Code */
             site_code: string;
         };
-        /** ManualDecision */
-        ManualDecision: {
-            /** Group Id */
-            group_id: string;
-            /** Sap Row */
-            sap_row: number;
-            /** Asset Id */
-            asset_id: string | null;
-            /** Proposed Asset Id */
-            proposed_asset_id: string | null;
-            /**
-             * Decided At
-             * Format: date-time
-             */
-            decided_at: string;
+        /** LocationCount */
+        LocationCount: {
+            /** Location */
+            location: string;
+            /** Building */
+            building: string | null;
+            /** Rows */
+            rows: number;
         };
         /**
-         * MatchStatus
+         * LogAction
          * @enum {string}
          */
-        MatchStatus: "Matched" | "Matched – location mismatch" | "Needs decision" | "Manually resolved" | "Physical only" | "SAP only" | "Defective – excluded" | "Duplicate entry" | "Unclassified";
+        LogAction: "assign" | "no_match" | "reset" | "released";
+        /** LogEntry */
+        LogEntry: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Row */
+            row: number;
+            action: components["schemas"]["LogAction"];
+            /** Old Asset Id */
+            old_asset_id: string | null;
+            /** New Asset Id */
+            new_asset_id: string | null;
+            reason?: components["schemas"]["NoMatchReason"] | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** MatchSummary */
+        MatchSummary: {
+            /** Incoming Rows */
+            incoming_rows: number;
+            /** Existing Units */
+            existing_units: number;
+            /** Resolved */
+            resolved: number;
+            /** Unresolved */
+            unresolved: number;
+            /** Status Counts */
+            status_counts: {
+                [key: string]: number;
+            };
+            /** Location Mismatches */
+            location_mismatches: number;
+            /** Tie Resolved */
+            tie_resolved: number;
+            /** Unpaired Existing */
+            unpaired_existing: number;
+            /** Auto Match Threshold */
+            auto_match_threshold: number;
+            /** Export Ready */
+            export_ready: boolean;
+        };
+        /**
+         * NoMatchReason
+         * @enum {string}
+         */
+        NoMatchReason: "missing_asset" | "new_asset" | "duplicate_entry" | "other";
         /**
          * Note
          * @description One message: ``code`` + ``params`` for translation, ``text`` in English.
@@ -295,258 +564,164 @@ export interface components {
             /** Text */
             text: string;
         };
-        /**
-         * Pair
-         * @description A physical↔SAP pairing, including provisional tie suggestions.
-         */
-        Pair: {
-            /** Sap Row */
-            sap_row: number;
-            /** Physical Row */
-            physical_row: number;
-            /** Asset Id */
-            asset_id: string;
-            confidence: components["schemas"]["Confidence"];
-            /** Location Mismatch */
-            location_mismatch: boolean;
-            /** Year Gap */
-            year_gap: number | null;
-            /** Tie Group Id */
-            tie_group_id?: string | null;
-            /**
-             * Provisional
-             * @default false
-             */
-            provisional: boolean;
+        /** OriginalSummary */
+        OriginalSummary: {
+            /** Rows */
+            rows: number;
+            /** Locations */
+            locations: components["schemas"]["LocationCount"][];
+            /** Duplicate Asset Ids */
+            duplicate_asset_ids: components["schemas"]["RepeatedValue"][];
+            /** Duplicate Rows */
+            duplicate_rows: components["schemas"]["DuplicateRow"][];
+            /** Defective Rows */
+            defective_rows: number[];
+            /** Issues */
+            issues: components["schemas"]["RowIssue"][];
         };
-        /** PhysicalRow */
-        PhysicalRow: {
-            /** Excel Row */
-            excel_row: number;
-            /** Asset Id */
-            asset_id: string | null;
-            /** Item Name */
-            item_name: string | null;
-            /** Description */
-            description: string | null;
-            /** Color */
-            color: string | null;
-            /** Width Cm */
-            width_cm: number | null;
-            /** Size Word */
-            size_word: string | null;
-            /** City */
-            city: string | null;
-            /** Building */
-            building: string | null;
-            /** Custodian */
-            custodian: string | null;
-            /** Activation Date */
-            activation_date: string | null;
-            /** Deactivation Date */
-            deactivation_date: string | null;
-            /** Gross Value */
-            gross_value: number | null;
-            /** Status */
-            status: string | null;
-            /** Sap Type */
-            sap_type: string | null;
-            match_status: components["schemas"]["MatchStatus"];
-            confidence?: components["schemas"]["Confidence"] | null;
-            /** Matched Sap Row */
-            matched_sap_row?: number | null;
-            /** Tie Group Id */
-            tie_group_id?: string | null;
-            /** Duplicate Of */
-            duplicate_of?: number | null;
-            /** Notes */
-            notes?: components["schemas"]["Note"][];
+        /** OriginalUpload */
+        OriginalUpload: {
+            sheet: components["schemas"]["SheetInfo"];
+            summary: components["schemas"]["OriginalSummary"];
         };
-        /** SapRow */
-        SapRow: {
-            /** Excel Row */
-            excel_row: number;
-            /** Item Name */
-            item_name: string | null;
-            /** Color */
-            color: string | null;
-            /** Material */
-            material: string | null;
-            /** Width Cm */
-            width_cm: number | null;
-            /** Serial No */
-            serial_no: string | null;
-            /** Serial Year */
-            serial_year: number | null;
-            /** Building */
-            building: string | null;
-            /** City */
-            city: string | null;
-            /** Remarks */
-            remarks: string | null;
-            /** Qr Code */
-            qr_code: string | null;
-            /** Asset Id */
-            asset_id: string | null;
-            /** Suggested Asset Id */
-            suggested_asset_id?: string | null;
-            match_status: components["schemas"]["MatchStatus"];
-            confidence?: components["schemas"]["Confidence"] | null;
-            /** Matched Physical Row */
-            matched_physical_row?: number | null;
-            /** Tie Group Id */
-            tie_group_id?: string | null;
-            /** Duplicate Of */
-            duplicate_of?: number | null;
-            /** Notes */
-            notes?: components["schemas"]["Note"][];
-        };
-        /** SessionCreated */
-        SessionCreated: {
+        /** OriginalUploaded */
+        OriginalUploaded: {
             /** Session Id */
             session_id: string;
-            /** Detected */
-            detected: components["schemas"]["DetectedSheet"][];
-            /** Warnings */
-            warnings: components["schemas"]["Note"][];
-            summary: components["schemas"]["Summary"];
+            original: components["schemas"]["OriginalUpload"];
+            /**
+             * Discarded Later Steps
+             * @description True if an incoming list (and its decisions) existed and was discarded.
+             */
+            discarded_later_steps: boolean;
+        };
+        /** RepeatedValue */
+        RepeatedValue: {
+            /** Value */
+            value: string;
+            /** Rows */
+            rows: number[];
+        };
+        /** RowIssue */
+        RowIssue: {
+            /** Row */
+            row: number | null;
+            /** Code */
+            code: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | null;
+            };
+            /** Message */
+            message: string;
+        };
+        /**
+         * RowStatus
+         * @description Status of one incoming row (section 4).
+         * @enum {string}
+         */
+        RowStatus: "auto" | "auto_newest" | "location_mismatch" | "manual" | "no_match" | "no_candidate" | "duplicate";
+        /** ScoringConfig */
+        ScoringConfig: {
+            /**
+             * @default {
+             *       "type": 35,
+             *       "color": 15,
+             *       "size": 15,
+             *       "location": 10,
+             *       "material": 10
+             *     }
+             */
+            weights: components["schemas"]["ScoringWeights"];
+            /**
+             * Auto Match Threshold
+             * @default 80
+             */
+            auto_match_threshold: number;
+            /**
+             * Material Keywords
+             * @default []
+             */
+            material_keywords: string[];
+            /**
+             * Material Synonyms
+             * @default {}
+             */
+            material_synonyms: {
+                [key: string]: string[];
+            };
+        };
+        /** ScoringWeights */
+        ScoringWeights: {
+            /**
+             * Type
+             * @default 35
+             */
+            type: number;
+            /**
+             * Color
+             * @default 15
+             */
+            color: number;
+            /**
+             * Size
+             * @default 15
+             */
+            size: number;
+            /**
+             * Location
+             * @default 10
+             */
+            location: number;
+            /**
+             * Material
+             * @default 10
+             */
+            material: number;
         };
         /** SessionResult */
         SessionResult: {
-            summary: components["schemas"]["Summary"];
-            /** Physical Rows */
-            physical_rows: components["schemas"]["PhysicalRow"][];
-            /** Sap Rows */
-            sap_rows: components["schemas"]["SapRow"][];
-            /** Pairs */
-            pairs: components["schemas"]["Pair"][];
-            /** Tie Groups */
-            tie_groups: components["schemas"]["TieGroup"][];
-            /** Discrepancies */
-            discrepancies: components["schemas"]["Discrepancy"][];
-            /** Decisions */
-            decisions: components["schemas"]["ManualDecision"][];
+            summary: components["schemas"]["MatchSummary"];
+            /** Rows */
+            rows: components["schemas"]["IncomingResult"][];
+            /** Unpaired Existing */
+            unpaired_existing: components["schemas"]["ExistingItem"][];
+            /** Log */
+            log: components["schemas"]["LogEntry"][];
             /** Warnings */
             warnings: components["schemas"]["Note"][];
             /** Session Id */
             session_id: string;
-            /** Detected */
-            detected: components["schemas"]["DetectedSheet"][];
         };
-        /** Summary */
-        Summary: {
-            /** Physical Total */
-            physical_total: number;
-            /** Sap Total */
-            sap_total: number;
-            /** Pairs */
-            pairs: number;
-            /** Physical Status Counts */
-            physical_status_counts: {
-                [key: string]: number;
-            };
-            /** Sap Status Counts */
-            sap_status_counts: {
-                [key: string]: number;
-            };
-            /** Confidence Counts */
-            confidence_counts: {
-                [key: string]: number;
-            };
-            /** Location Mismatches */
-            location_mismatches: number;
-            /** Tie Groups */
-            tie_groups: number;
-            /** Tie Slots */
-            tie_slots: number;
-            /** Tie Slots Pending */
-            tie_slots_pending: number;
-            /** Manual Decisions */
-            manual_decisions: number;
-            /** Rules Version */
-            rules_version: string;
+        /**
+         * SessionState
+         * @description Where a session is in the upload → match flow.
+         */
+        SessionState: {
+            /** Session Id */
+            session_id: string;
+            original: components["schemas"]["OriginalUpload"] | null;
+            incoming: components["schemas"]["IncomingUpload"] | null;
+            /** Matched */
+            matched: boolean;
         };
-        /** TieAssignment */
-        TieAssignment: {
-            /** Sap Row */
-            sap_row: number;
-            /** Physical Asset Id */
-            physical_asset_id: string | null;
-        };
-        /** TieCandidate */
-        TieCandidate: {
-            /** Physical Row */
-            physical_row: number;
-            /** Asset Id */
-            asset_id: string;
-            /** Activation Date */
-            activation_date: string | null;
-            /** City */
-            city: string | null;
-            /** Building */
-            building: string | null;
-            /** Custodian */
-            custodian: string | null;
-            /** Gross Value */
-            gross_value: number | null;
-        };
-        /** TieDecisionRequest */
-        TieDecisionRequest: {
+        /** SheetInfo */
+        SheetInfo: {
+            /** File Name */
+            file_name: string;
+            /** Sheet Name */
+            sheet_name: string;
             /**
-             * Assignments
-             * @description One entry per SAP row to decide; physical_asset_id null = leave unmatched.
+             * Detected By
+             * @enum {string}
              */
-            assignments: components["schemas"]["TieAssignment"][];
-        };
-        /** TieGroup */
-        TieGroup: {
-            /** Group Id */
-            group_id: string;
-            /** Sap Type */
-            sap_type: string;
-            /** Color */
-            color: string | null;
-            /** Width Cm */
-            width_cm: number | null;
-            /** Year */
-            year: number | null;
-            /** Locations */
-            locations: string[];
-            /** Physical Rows */
-            physical_rows: number[];
-            /** Sap Rows */
-            sap_rows: number[];
-            /** Candidates */
-            candidates: components["schemas"]["TieCandidate"][];
-            /** Slots */
-            slots: components["schemas"]["TieSlot"][];
-            /** Proposed Pairs */
-            proposed_pairs: components["schemas"]["TieAssignment"][];
-            /** Pending Slots */
-            readonly pending_slots: number;
-        };
-        /** TieSlot */
-        TieSlot: {
-            /** Sap Row */
-            sap_row: number;
-            /** Serial No */
-            serial_no: string | null;
-            /** Building */
-            building: string | null;
-            /** Remarks */
-            remarks: string | null;
-            /** Qr Code */
-            qr_code: string | null;
-            /** Suggested Asset Id */
-            suggested_asset_id: string | null;
-            /** Chosen Asset Id */
-            chosen_asset_id?: string | null;
-            /**
-             * Decided
-             * @default false
-             */
-            decided: boolean;
-            confidence: components["schemas"]["Confidence"];
+            detected_by: "sheet_name" | "header_signature" | "user_choice";
+            /** Sheets Available */
+            sheets_available: string[];
+            /** Row Count */
+            row_count: number;
+            /** Missing Optional Columns */
+            missing_optional_columns: string[];
         };
         /** TypeRule */
         TypeRule: {
@@ -616,11 +791,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_create_session_api_sessions_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             201: {
@@ -628,11 +799,186 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionCreated"];
+                    "application/json": components["schemas"]["SessionState"];
                 };
             };
-            /** @description Unknown session or tie group */
+        };
+    };
+    get_state_api_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Unknown session or row */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_session_api_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_original_api_sessions__session_id__original_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_original_api_sessions__session_id__original_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OriginalUploaded"];
+                };
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A previous step is not done yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description File too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_incoming_api_sessions__session_id__incoming_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_incoming_api_sessions__session_id__incoming_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomingUploaded"];
+                };
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A previous step is not done yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -680,8 +1026,17 @@ export interface operations {
                     "application/json": components["schemas"]["SessionResult"];
                 };
             };
-            /** @description Unknown session or tie group */
+            /** @description Unknown session or row */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A previous step is not done yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -700,57 +1055,21 @@ export interface operations {
             };
         };
     };
-    decide_tie_api_sessions__session_id__ties__group_id__put: {
+    get_candidates_api_sessions__session_id__incoming__row__candidates_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also units assigned to other rows */
+                include_paired?: boolean;
+                /** @description Also units of other types */
+                include_other_types?: boolean;
+                /** @description Also defective units */
+                include_defective?: boolean;
+                /** @description Search Asset ID, description, custodian */
+                q?: string | null;
+            };
             header?: never;
             path: {
-                group_id: string;
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TieDecisionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TieGroup"];
-                };
-            };
-            /** @description Unknown session or tie group */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid input */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    reset_tie_api_sessions__session_id__ties__group_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: string;
+                row: number;
                 session_id: string;
             };
             cookie?: never;
@@ -763,11 +1082,127 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TieGroup"];
+                    "application/json": components["schemas"]["Candidate"][];
                 };
             };
-            /** @description Unknown session or tie group */
+            /** @description Unknown session or row */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A previous step is not done yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_assignment_api_sessions__session_id__incoming__row__assignment_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                row: number;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Matching has not run, or the unit belongs to another row (code swap_required: repeat with confirm_swap) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_assignment_api_sessions__session_id__incoming__row__assignment_delete: {
+        parameters: {
+            query?: {
+                /** @description Take back the unit from another row */
+                confirm_swap?: boolean;
+            };
+            header?: never;
+            path: {
+                row: number;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Matching has not run, or the unit belongs to another row (code swap_required: repeat with confirm_swap) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -797,7 +1232,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The reconciled workbook */
+            /** @description The uploaded incoming workbook with its Asset IDs filled in */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -806,7 +1241,7 @@ export interface operations {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
-            /** @description Unknown session or tie group */
+            /** @description Unknown session or row */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -815,37 +1250,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Invalid input */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_session_api_sessions__session_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unknown session or tie group */
-            404: {
+            /** @description Matching has not run, or items are still unresolved (code unresolved_items) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
