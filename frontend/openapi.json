@@ -233,8 +233,8 @@
     },
     "/api/sessions/{session_id}/incoming": {
       "post": {
-        "summary": "Step 2: upload the incoming furniture list; matching runs right away",
-        "description": "409 until the original inventory is uploaded. Uploading again replaces the list and\ndiscards every decision.",
+        "summary": "Step 2: upload the incoming furniture list",
+        "description": "409 until the original inventory is uploaded. Matching does not start yet: see\n``POST /match``. Uploading again discards an earlier matching and its decisions.",
         "operationId": "upload_incoming_api_sessions__session_id__incoming_post",
         "parameters": [
           {
@@ -300,6 +300,66 @@
           },
           "413": {
             "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{session_id}/match": {
+      "post": {
+        "summary": "Step 3: start the matching",
+        "description": "Runs the matching once both files are uploaded (409 before). Calling it again\nreturns the existing result with its decisions.",
+        "operationId": "start_matching_api_sessions__session_id__match_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown session or row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A previous step is not done yet",
             "content": {
               "application/json": {
                 "schema": {
@@ -1631,26 +1691,15 @@
           },
           "discarded_decisions": {
             "type": "boolean",
-            "title": "Discarded Decisions"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/MatchSummary"
-          },
-          "warnings": {
-            "items": {
-              "$ref": "#/components/schemas/Note"
-            },
-            "type": "array",
-            "title": "Warnings"
+            "title": "Discarded Decisions",
+            "description": "True if an earlier matching result (and its decisions) was discarded."
           }
         },
         "type": "object",
         "required": [
           "session_id",
           "incoming",
-          "discarded_decisions",
-          "summary",
-          "warnings"
+          "discarded_decisions"
         ],
         "title": "IncomingUploaded"
       },

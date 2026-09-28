@@ -19,8 +19,15 @@ export function StatusBadge({ status }: { status: RowStatus }) {
   return <span className={`${BADGE} ${STATUS_CLASSES[status]}`}>{t.status[status] ?? status}</span>;
 }
 
-export function Tag({ tone, children }: { tone: "info" | "warn" | "danger" | "muted"; children: string }) {
+export function Tag({
+  tone,
+  children,
+}: {
+  tone: "info" | "warn" | "danger" | "muted" | "success";
+  children: string;
+}) {
   const tones = {
+    success: "bg-emerald-50 text-emerald-800 ring-emerald-600/30",
     info: "bg-blue-50 text-blue-800 ring-blue-600/20",
     warn: "bg-amber-50 text-amber-900 ring-amber-600/30",
     danger: "bg-red-50 text-red-800 ring-red-600/20",

@@ -36,6 +36,12 @@ def new_session(client) -> str:
     return r.json()["session_id"]
 
 
+def match(client, sid):
+    r = client.post(f"/api/sessions/{sid}/match")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 def upload(client, sid, step, data, name=None, sheet=None):
     return client.post(
         f"/api/sessions/{sid}/{step}",
@@ -141,9 +147,13 @@ def test_fixture_flow_and_summaries(client, fixtures):
     assert summary["rows"] == 20
     assert summary["duplicate_rows"] == []  # rows 19/20 differ in their QR code
     assert summary["prefilled_asset_ids"] == []
-    assert body["summary"]["resolved"] == 16  # matching ran right after the upload
-    assert body["summary"]["unresolved"] == 4
+    assert "summary" not in body  # the upload does not start the matching
+    assert client.get(f"/api/sessions/{sid}").json()["matched"] is False
+    assert client.get(f"/api/sessions/{sid}/result").status_code == 409
 
+    res = match(client, sid)
+    assert res["summary"]["resolved"] == 16
+    assert res["summary"]["unresolved"] == 4
     state = client.get(f"/api/sessions/{sid}").json()
     assert state["matched"] is True
     assert state["original"]["sheet"]["file_name"] == "physical_inventory.xlsx"
@@ -169,6 +179,7 @@ def test_reuploading_original_discards_incoming_and_decisions(client):
     sid = new_session(client)
     upload(client, sid, "original", original)
     upload(client, sid, "incoming", incoming)
+    match(client, sid)
     no_pair(client, sid, 2)
     assert len(client.get(f"/api/sessions/{sid}/result").json()["log"]) == 1
 
@@ -180,7 +191,7 @@ def test_reuploading_original_discards_incoming_and_decisions(client):
 
     # the decisions are gone for good: a fresh incoming upload starts clean
     upload(client, sid, "incoming", incoming)
-    assert client.get(f"/api/sessions/{sid}/result").json()["log"] == []
+    assert match(client, sid)["log"] == []
 
 
 def test_reuploading_incoming_discards_decisions(client):
@@ -188,10 +199,12 @@ def test_reuploading_incoming_discards_decisions(client):
     sid = new_session(client)
     upload(client, sid, "original", original)
     upload(client, sid, "incoming", incoming)
+    match(client, sid)
     no_pair(client, sid, 2)
     r = upload(client, sid, "incoming", incoming)
     assert r.json()["discarded_decisions"] is True
-    assert client.get(f"/api/sessions/{sid}/result").json()["log"] == []
+    assert client.get(f"/api/sessions/{sid}").json()["matched"] is False
+    assert match(client, sid)["log"] == []
 
 
 def test_failed_upload_changes_nothing(client):
@@ -199,6 +212,7 @@ def test_failed_upload_changes_nothing(client):
     sid = new_session(client)
     upload(client, sid, "original", original)
     upload(client, sid, "incoming", incoming)
+    match(client, sid)
     r = upload(client, sid, "original", b"not a zip", "bad.xlsx")
     assert r.status_code == 422
     state = client.get(f"/api/sessions/{sid}").json()
@@ -238,7 +252,7 @@ def test_original_file_is_only_read(client, fixtures):
     sid = new_session(client)
     upload(client, sid, "original", original)
     upload(client, sid, "incoming", incoming)
-    client.get(f"/api/sessions/{sid}/result")
+    match(client, sid)
     assert hashlib.sha256(ORIGINAL_FILE.read_bytes()).hexdigest() == before
 
 
@@ -250,7 +264,30 @@ def matched_small(client) -> str:
     sid = new_session(client)
     upload(client, sid, "original", original)
     upload(client, sid, "incoming", incoming)
+    match(client, sid)
     return sid
+
+
+def test_matching_starts_only_when_asked(client):
+    original, incoming = small_files()
+    sid = new_session(client)
+    r = client.post(f"/api/sessions/{sid}/match")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "step_order"
+    upload(client, sid, "original", original)
+    assert client.post(f"/api/sessions/{sid}/match").status_code == 409
+    upload(client, sid, "incoming", incoming)
+    assert client.get(f"/api/sessions/{sid}").json()["matched"] is False
+    assert client.get(f"/api/sessions/{sid}/incoming/2/candidates").status_code == 409
+    res = match(client, sid)
+    assert res["summary"]["resolved"] == 2
+
+
+def test_starting_again_keeps_the_decisions(client):
+    sid = matched_small(client)
+    no_pair(client, sid, 2)
+    res = match(client, sid)
+    assert [e["action"] for e in res["log"]] == ["no_match"]
+    assert next(r for r in res["rows"] if r["item"]["excel_row"] == 2)["status"] == "no_match"
 
 
 def row_status(client, sid):

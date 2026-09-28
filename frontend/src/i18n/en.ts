@@ -8,6 +8,26 @@ export const en = {
   languageName: "English",
   languageLabel: "Language",
   appTitle: "Inventory Reconciliation",
+  tagline: "Fill in the Asset IDs of new furniture from your existing inventory",
+  guide: { label: "What to do now", todoLabel: "What to do now", doneLabel: "Done" },
+  how: {
+    title: "How it works",
+    original: "Original inventory",
+    originalText: "Upload the list of existing furniture with their Asset IDs.",
+    incoming: "New furniture list",
+    incomingText: "Upload the list of new furniture whose Asset IDs are empty.",
+    matching: "Matching",
+    matchingText: "The app pairs every item it can; you decide the rest, one by one.",
+    export: "Export",
+    exportText: "Download the new list with the Asset IDs filled in.",
+  },
+  run: {
+    title: "Matching in progress…",
+    text: "The new items are compared with the existing inventory.",
+    stages: ["Reading both lists", "Comparing every item", "Choosing the best pairs"],
+    failed: "The matching could not run.",
+    retry: "Try again",
+  },
   nav: { rules: "Rules", back: "Back to the steps", newSession: "Start over" },
   newSessionConfirmTitle: "Start over?",
   newSessionConfirm: "Both uploads and every decision are discarded.",
@@ -26,15 +46,46 @@ export const en = {
     done: "done",
     current: "current step",
     locked: "not available yet",
+    hint: {
+      original: "Existing furniture",
+      incoming: "New furniture",
+      matching: "Pair the items",
+      export: "Download the file",
+    },
   },
 
   upload: {
-    originalTitle: "Step 1 – Original inventory",
-    originalIntro:
-      "The existing furniture, one Asset ID per unit. This file is only read: it is never changed, written back or offered for download.",
-    incomingTitle: "Step 2 – Incoming furniture list",
-    incomingIntro:
-      "The new furniture list with an empty Asset ID column. Matching starts as soon as the file is uploaded.",
+    original: {
+      eyebrow: "Step 1 of 4",
+      title: "Upload the original inventory",
+      intro:
+        "The existing furniture, one Asset ID per unit. This file is only read: it is never changed or offered for download.",
+      todoTitle: "Choose the original inventory file",
+      todoText: "Drag the Excel file into the box below (or click it to browse), then press Upload.",
+      doneTitle: "The original inventory is ready",
+      doneText: "Check the summary below, then continue with the new furniture list.",
+      next: "Continue to the new furniture list",
+    },
+    incoming: {
+      eyebrow: "Step 2 of 4",
+      title: "Upload the new furniture list",
+      intro: "The list of incoming furniture with an empty Asset ID column. The app will fill in those Asset IDs.",
+      todoTitle: "Choose the new furniture list",
+      todoText: "Drag the Excel file into the box below (or click it to browse), then press Upload.",
+      doneTitle: "The new furniture list is ready",
+      doneText: "Check the summary below. When you continue, the matching starts.",
+      next: "Start the matching",
+    },
+    fileTypes: "Excel workbook: .xlsx or .xlsm, up to 20 MB",
+    pickFirst: "Choose a file first.",
+    uploaded: "Uploaded and checked",
+    errorFix: "Check the file and try again, or choose a different file.",
+    statRows: "Rows",
+    statDuplicateIds: "Repeated Asset IDs",
+    statDefective: "Defective",
+    statItemTypes: "Item types",
+    statDuplicateRows: "Repeated rows",
+    statPrefilled: "Already filled",
     fileLabel: {
       original: "Original inventory (.xlsx / .xlsm)",
       incoming: "Incoming furniture list (.xlsx / .xlsm)",
@@ -67,10 +118,6 @@ export const en = {
     itemTypes: (n: number) => plural(n, "item type", "item types"),
     rowsList: (rows: string) => `rows ${rows}`,
     issues: "Data issues",
-    toIncoming: "Continue to the incoming list",
-    toMatching: "Go to matching",
-    matched: (resolved: number, total: number) =>
-      `Matching done: ${resolved} of ${total} items resolved automatically.`,
     replaceOriginalTitle: "Replace the original inventory?",
     replaceOriginal: "The incoming list and every decision made so far will be discarded.",
     replaceIncomingTitle: "Replace the incoming list?",
@@ -108,6 +155,33 @@ export const en = {
   } as Record<Criterion, string>,
 
   matching: {
+    eyebrow: "Step 3 of 4",
+    title: "Matching",
+    resolvedShort: "resolved",
+    revealTitle: (auto: number, total: number) => `${auto} of ${total} items were matched automatically`,
+    revealText:
+      "Only items that agree on every criterion are paired automatically. Everything else waits for your decision.",
+    kpiHelp: {
+      auto: "Exactly one unit fits on every criterion",
+      newest: "Several units fit; the newest was chosen",
+      unresolved: "Waiting for your decision",
+      manual: "Paired by you",
+      noMatch: "Confirmed: no existing unit",
+      location: "Paired by you although the location differs",
+    },
+    barTodo: (resolved: number, total: number, left: number) =>
+      `${resolved} of ${total} resolved – ${plural(left, "item still needs", "items still need")} your decision`,
+    barDone: (total: number) => `All ${total} items are resolved`,
+    resolveNext: "Next item to resolve",
+    toExport: "Continue to export",
+    todoTitle: (n: number) => `${plural(n, "item needs", "items need")} your decision`,
+    todoAction: "Review the items",
+    todoText:
+      "These had no 100% match. Go through them one by one: pick the right existing unit, or mark that there is none.",
+    todoTextResolve:
+      "Look at the item in the middle, compare it with the candidates on the right, then press Assign – or No pair if none of them is right.",
+    doneTitle: "Every item is resolved",
+    doneText: "Well done. Continue to the export to download the file.",
     tabsLabel: "Matching views",
     tabs: { overview: "Overview", resolve: "Items to resolve", all: "All items" },
     kpi: {
@@ -118,9 +192,6 @@ export const en = {
       manual: "Manually matched",
       noMatch: "No pair",
     },
-    remaining: (n: number) => `${plural(n, "item", "items")} still to resolve`,
-    allResolved: "All items are resolved – you can export.",
-    toQueue: "Resolve them",
     warnings: "Warnings",
     open: "Open",
     filter: "Filter rows",
@@ -176,6 +247,9 @@ export const en = {
     confirmNoPair: "Confirm",
     shortcuts: "Keys: ↑/↓ choose a candidate · Enter assign · N no pair · J next item",
     unpaired: (n: number) => `Existing units without a pair (${n})`,
+    bestMatch: "Best match",
+    allDoneTitle: "Well done – every item is resolved!",
+    allDoneText: (n: number) => `You resolved ${plural(n, "item", "items")}. The file is ready to export.`,
     unpairedHint: "These may help spot, for example, a mistyped location.",
   },
 
@@ -207,7 +281,19 @@ export const en = {
   },
 
   exportStep: {
-    title: "Step 4 – Export",
+    eyebrow: "Step 4 of 4",
+    title: "Export",
+    notReadyTitle: (n: number) => `${plural(n, "item still needs", "items still need")} a decision`,
+    readyTitle: "Download the finished file",
+    doneTitle: "Downloaded!",
+    doneText: (file: string) =>
+      `${file} has been saved. You can download it again or start a new reconciliation.`,
+    startOver: "Start a new reconciliation",
+    fileLabel: "The file you will get",
+    filled: "Asset IDs filled in",
+    empty: "Left empty (no pair)",
+    untouched: "Everything else in the file stays exactly as you uploaded it.",
+    again: "Download again",
     intro:
       "Downloads the incoming file as uploaded, with only its Asset ID column filled in. Items without a pair keep an empty Asset ID. This is the only download; the original inventory is never exported.",
     button: "Download file",
@@ -215,7 +301,7 @@ export const en = {
     remaining: (n: number) =>
       `Export is available once every item is resolved: ${plural(n, "item", "items")} left.`,
     toQueue: "Go to the items to resolve",
-    ready: "Every item is resolved.",
+    ready: "Every item is resolved. Press the button to download the file with the Asset IDs.",
   },
 
   // Error messages by the server's error code; anything else shows the server's own text.

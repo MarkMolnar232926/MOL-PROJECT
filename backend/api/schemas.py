@@ -8,8 +8,7 @@ from pydantic import BaseModel, Field
 
 from recon.config import Location, ScoringConfig, TypeRule
 from recon.intake import IncomingSummary, OriginalSummary, SheetInfo
-from recon.match_models import MatchResult, MatchSummary, NoMatchReason
-from recon.messages import Note
+from recon.match_models import MatchResult, NoMatchReason
 
 
 class HealthResponse(BaseModel):
@@ -54,9 +53,9 @@ class OriginalUploaded(BaseModel):
 class IncomingUploaded(BaseModel):
     session_id: str
     incoming: IncomingUpload
-    discarded_decisions: bool
-    summary: MatchSummary  # matching runs right after the upload
-    warnings: list[Note]
+    discarded_decisions: bool = Field(
+        description="True if an earlier matching result (and its decisions) was discarded."
+    )
 
 
 class SessionResult(MatchResult):

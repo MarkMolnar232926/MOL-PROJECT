@@ -29,8 +29,9 @@ class Session:
     """One reconciliation: the original inventory, then the incoming list, then decisions.
 
     The steps build on each other: uploading a new original inventory forgets the incoming
-    list and every decision; uploading a new incoming list forgets the decisions. Matching
-    runs once, when the incoming list arrives; decisions are laid over that result.
+    list and every decision; uploading a new incoming list forgets the matching and its
+    decisions. Matching runs once, when the user starts it (``run_matching``); decisions are
+    laid over that result.
     """
 
     session_id: str
@@ -54,20 +55,31 @@ class Session:
         return had_later
 
     def set_incoming(self, upload: SourceUpload) -> bool:
-        """Replace the incoming list and run matching. Returns True if decisions were dropped."""
+        """Replace the incoming list (matching does not start yet). Returns True if an earlier
+        matching result, with its decisions, was discarded."""
         if self.original is None:
             raise StepOrderError(
                 "Upload the original inventory first; the incoming list is matched against it."
             )
-        had_decisions = bool(self.matching and self.matching.log)
+        had_matching = self.matching is not None
         self.incoming = upload
-        self.matching = Matching(self.original, upload, self.cfg)
-        return had_decisions
+        self.matching = None
+        return had_matching
+
+    def run_matching(self) -> Matching:
+        """Start matching. Running it again keeps the existing result and its decisions."""
+        if self.original is None or self.incoming is None:
+            raise StepOrderError(
+                "Upload the original inventory and the incoming list before matching."
+            )
+        if self.matching is None:
+            self.matching = Matching(self.original, self.incoming, self.cfg)
+        return self.matching
 
     def require_matching(self) -> Matching:
         if self.matching is None:
             raise StepOrderError(
-                "Matching has not run yet: upload the original inventory and the incoming list."
+                "Matching has not run yet: upload both files, then start the matching."
             )
         return self.matching
 
