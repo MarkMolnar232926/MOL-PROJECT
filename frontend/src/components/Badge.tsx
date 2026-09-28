@@ -1,38 +1,30 @@
-import type { Confidence, MatchStatus } from "../api/client";
+import type { RowStatus } from "../api/client";
 import { useT } from "../i18n";
 
-const STATUS_CLASSES: Record<MatchStatus, string> = {
-  Matched: "bg-green-100 text-green-800 ring-green-600/20",
-  "Matched – location mismatch": "bg-amber-100 text-amber-900 ring-amber-600/30",
-  "Needs decision": "bg-orange-100 text-orange-900 ring-orange-600/30",
-  "Manually resolved": "bg-blue-100 text-blue-800 ring-blue-600/20",
-  "Physical only": "bg-red-100 text-red-800 ring-red-600/20",
-  "SAP only": "bg-red-100 text-red-800 ring-red-600/20",
-  "Defective – excluded": "bg-slate-100 text-slate-700 ring-slate-500/20",
-  "Duplicate entry": "bg-slate-100 text-slate-700 ring-slate-500/20",
-  Unclassified: "bg-fuchsia-100 text-fuchsia-800 ring-fuchsia-600/20",
+const STATUS_CLASSES: Record<RowStatus, string> = {
+  auto: "bg-green-100 text-green-800 ring-green-600/20",
+  auto_newest: "bg-emerald-50 text-emerald-800 ring-emerald-600/30",
+  location_mismatch: "bg-amber-100 text-amber-900 ring-amber-600/30",
+  manual: "bg-blue-100 text-blue-800 ring-blue-600/20",
+  no_match: "bg-slate-100 text-slate-700 ring-slate-500/20",
+  no_candidate: "bg-red-100 text-red-800 ring-red-600/20",
+  duplicate: "bg-orange-100 text-orange-900 ring-orange-600/30",
 };
 
-const CONFIDENCE_CLASSES: Record<Confidence, string> = {
-  High: "bg-green-50 text-green-700 ring-green-600/20",
-  Medium: "bg-yellow-50 text-yellow-800 ring-yellow-600/20",
-  Manual: "bg-blue-50 text-blue-700 ring-blue-600/20",
-  "Needs decision": "bg-orange-50 text-orange-800 ring-orange-600/20",
-};
+export const BADGE =
+  "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset";
 
-const BASE = "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset";
-
-export function StatusBadge({ status }: { status: MatchStatus }) {
+export function StatusBadge({ status }: { status: RowStatus }) {
   const t = useT();
-  return <span className={`${BASE} ${STATUS_CLASSES[status]}`}>{t.status[status] ?? status}</span>;
+  return <span className={`${BADGE} ${STATUS_CLASSES[status]}`}>{t.status[status] ?? status}</span>;
 }
 
-export function ConfidenceBadge({ confidence }: { confidence: Confidence | null | undefined }) {
-  const t = useT();
-  if (!confidence) return null;
-  return (
-    <span className={`${BASE} ${CONFIDENCE_CLASSES[confidence]}`}>
-      {t.confidence[confidence] ?? confidence}
-    </span>
-  );
+export function Tag({ tone, children }: { tone: "info" | "warn" | "danger" | "muted"; children: string }) {
+  const tones = {
+    info: "bg-blue-50 text-blue-800 ring-blue-600/20",
+    warn: "bg-amber-50 text-amber-900 ring-amber-600/30",
+    danger: "bg-red-50 text-red-800 ring-red-600/20",
+    muted: "bg-slate-50 text-slate-700 ring-slate-500/20",
+  };
+  return <span className={`${BADGE} ${tones[tone]}`}>{children}</span>;
 }
