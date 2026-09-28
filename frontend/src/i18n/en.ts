@@ -77,6 +77,10 @@ export const en = {
     replaceIncoming: "Every decision made so far will be discarded.",
     replaceConfirm: "Replace",
     errorTitle: "The file could not be used",
+    looksLike: {
+      physical: "This file looks like an original inventory: upload it in step 1.",
+      sap: "This file looks like an incoming furniture list: upload it in step 2.",
+    } as Record<string, string>,
     missingColumns: (sheet: string, cols: string) => `${sheet}: missing ${cols}`,
   },
 
@@ -86,7 +90,7 @@ export const en = {
     location_mismatch: "Matched – location differs",
     manual: "Manually matched",
     no_match: "No pair (confirmed)",
-    no_candidate: "To resolve – no candidate",
+    no_candidate: "To resolve – no exact match",
     duplicate: "To resolve – duplicate row",
   } as Record<RowStatus, string>,
   reasons: {
@@ -225,7 +229,12 @@ export const en = {
     session_not_found: "This session has expired. Please upload the files again.",
     step_order: "Upload the original inventory first.",
     invalid_assignment: "That choice is not valid.",
+    swap_required: "This unit is assigned to another row.",
+    row_not_found: "This row does not exist in the incoming list.",
     unresolved_items: "Some items still need a decision.",
+    invalid_request: "The request is not valid.",
+    internal_error: "Something went wrong on the server.",
+    http_error: "The server returned an error.",
     export_failed: "The export failed.",
   } as Record<string, string>,
 
@@ -266,7 +275,7 @@ export const en = {
     deactivated: () => "The unit has a deactivation date.",
     incoming_duplicate: (p) => `Identical to row ${p.first} of the incoming list.`,
     no_candidate: (p) =>
-      `No free existing unit of this type, colour and size reaches ${p.threshold}%.`,
+      `No free existing unit matches on every criterion (${p.threshold}%); choose one by hand.`,
     tie_newest: () =>
       "Several existing units fit equally well; the one with the newest activation date was chosen.",
     released_by_swap: (p) => `Its automatic pair (${p.asset_id}) was given to another row.`,
@@ -283,8 +292,11 @@ export const en = {
     anyDescription: "(any description)",
     locations: "Locations",
     siteCode: "Site code",
-    weights: "Score weights",
-    threshold: "Automatic matching threshold",
+    matching: "Matching",
+    equalCriteria: (criteria: string) =>
+      `Every criterion counts equally: ${criteria}. The score is the share of the criteria that could be compared and agree; a criterion that cannot be compared (e.g. no size in the description) is left out.`,
+    threshold: (n: number) =>
+      `Only a ${n}% match is paired automatically; everything else is left for manual review.`,
     materialKeywords: "Material keywords",
     excluded: "Statuses never matched automatically",
   },

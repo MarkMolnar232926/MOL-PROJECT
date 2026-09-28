@@ -50,7 +50,6 @@ class Criterion(StrEnum):
 
 class CriterionCheck(BaseModel):
     criterion: Criterion
-    weight: float
     evaluable: bool  # False: this pair gives nothing to compare (left out of the score)
     match: bool | None  # None when not evaluable
     existing: str | None  # the value on the existing unit, for display

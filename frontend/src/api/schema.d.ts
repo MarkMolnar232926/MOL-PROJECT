@@ -302,8 +302,6 @@ export interface components {
         /** CriterionCheck */
         CriterionCheck: {
             criterion: components["schemas"]["Criterion"];
-            /** Weight */
-            weight: number;
             /** Evaluable */
             evaluable: boolean;
             /** Match */
@@ -621,21 +619,14 @@ export interface components {
          * @enum {string}
          */
         RowStatus: "auto" | "auto_newest" | "location_mismatch" | "manual" | "no_match" | "no_candidate" | "duplicate";
-        /** ScoringConfig */
+        /**
+         * ScoringConfig
+         * @description Every criterion counts equally; only a full match is paired automatically.
+         */
         ScoringConfig: {
             /**
-             * @default {
-             *       "type": 35,
-             *       "color": 15,
-             *       "size": 15,
-             *       "location": 10,
-             *       "material": 10
-             *     }
-             */
-            weights: components["schemas"]["ScoringWeights"];
-            /**
              * Auto Match Threshold
-             * @default 80
+             * @default 100
              */
             auto_match_threshold: number;
             /**
@@ -650,34 +641,6 @@ export interface components {
             material_synonyms: {
                 [key: string]: string[];
             };
-        };
-        /** ScoringWeights */
-        ScoringWeights: {
-            /**
-             * Type
-             * @default 35
-             */
-            type: number;
-            /**
-             * Color
-             * @default 15
-             */
-            color: number;
-            /**
-             * Size
-             * @default 15
-             */
-            size: number;
-            /**
-             * Location
-             * @default 10
-             */
-            location: number;
-            /**
-             * Material
-             * @default 10
-             */
-            material: number;
         };
         /** SessionResult */
         SessionResult: {

@@ -58,18 +58,10 @@ export function RulesPage() {
         </table>
       </section>
       <section>
-        <h3 className="mb-2 font-semibold">{t.rules.weights}</h3>
-        <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
-          {(Object.keys(t.criteria) as (keyof typeof t.criteria)[]).map((k) => (
-            <div key={k} className="contents">
-              <dt>{t.criteria[k]}</dt>
-              <dd>{c.scoring.weights?.[k]}</dd>
-            </div>
-          ))}
-          <dt className="font-medium">{t.rules.threshold}</dt>
-          <dd className="font-medium">{c.scoring.auto_match_threshold}%</dd>
-        </dl>
-        <p className="mt-2 text-sm">
+        <h3 className="mb-2 font-semibold">{t.rules.matching}</h3>
+        <p className="text-sm">{t.rules.equalCriteria(Object.values(t.criteria).join(", "))}</p>
+        <p className="mt-1 text-sm">{t.rules.threshold(c.scoring.auto_match_threshold ?? 100)}</p>
+        <p className="mt-1 text-sm">
           {t.rules.materialKeywords}: {(c.scoring.material_keywords ?? []).join(", ")}
         </p>
       </section>

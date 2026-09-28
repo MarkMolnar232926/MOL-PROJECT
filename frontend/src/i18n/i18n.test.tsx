@@ -43,6 +43,36 @@ test("switching to Hungarian is remembered", async () => {
   expect(screen.getByRole("heading", { name: "Leltáregyeztetés" })).toBeInTheDocument();
 });
 
+// Texts that are the same in both languages on purpose (names, codes, formats).
+const SAME_IN_BOTH = new Set(["cols.assetId", "upload.sheetLine"]);
+
+/** Every leaf text of a language object, functions called with sample arguments. */
+function leaves(obj: unknown, path = ""): Map<string, string> {
+  const out = new Map<string, string>();
+  const sample = new Proxy({}, { get: (_t, key) => (key === "then" ? undefined : `‹${String(key)}›`) });
+  if (typeof obj === "string") out.set(path, obj);
+  else if (typeof obj === "function") {
+    const fn = obj as (...a: unknown[]) => string;
+    // server messages take a params object; the UI helpers take numbers/strings
+    out.set(path, path.startsWith("messages.") ? fn(sample) : fn(2, 3, 4, 5));
+  } else if (obj && typeof obj === "object") {
+    for (const [k, v] of Object.entries(obj)) {
+      for (const [p, text] of leaves(v, path ? `${path}.${k}` : k)) out.set(p, text);
+    }
+  }
+  return out;
+}
+
+test("every text is translated to Hungarian", () => {
+  const english = leaves(en);
+  const hungarian = leaves(hu);
+  expect([...hungarian.keys()].sort()).toEqual([...english.keys()].sort());
+  const untranslated = [...english].filter(
+    ([path, text]) => !SAME_IN_BOTH.has(path) && hungarian.get(path) === text,
+  );
+  expect(untranslated).toEqual([]);
+});
+
 test("both languages know the same server values", () => {
   for (const group of ["status", "reasons", "criteria", "errors", "messages"] as const) {
     expect(Object.keys(hu[group]).sort()).toEqual(Object.keys(en[group]).sort());

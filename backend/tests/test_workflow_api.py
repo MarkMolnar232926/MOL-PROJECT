@@ -141,8 +141,8 @@ def test_fixture_flow_and_summaries(client, fixtures):
     assert summary["rows"] == 20
     assert summary["duplicate_rows"] == []  # rows 19/20 differ in their QR code
     assert summary["prefilled_asset_ids"] == []
-    assert body["summary"]["resolved"] == 18  # matching ran right after the upload
-    assert body["summary"]["unresolved"] == 2
+    assert body["summary"]["resolved"] == 16  # matching ran right after the upload
+    assert body["summary"]["unresolved"] == 4
 
     state = client.get(f"/api/sessions/{sid}").json()
     assert state["matched"] is True

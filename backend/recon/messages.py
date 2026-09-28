@@ -77,7 +77,8 @@ EN: dict[str, Callable[[dict[str, Param]], str]] = {
     # score-based matching (v2)
     "incoming_duplicate": lambda p: f"Identical to row {p['first']} of the incoming list.",
     "no_candidate": lambda p: (
-        f"No free existing unit of this type, colour and size reaches {p['threshold']:g}%."
+        f"No free existing unit matches on every criterion ({p['threshold']:g}%); "
+        "choose one by hand."
     ),
     "tie_newest": lambda p: (
         "Several existing units fit equally well; the one with the newest activation date "

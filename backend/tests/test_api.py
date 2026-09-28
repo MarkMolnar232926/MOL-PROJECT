@@ -29,14 +29,8 @@ def test_health_and_config(client):
     body = client.get("/api/config").json()
     assert len(body["type_rules"]) == 25
     assert {loc["building"] for loc in body["locations"]} == {"RVS", "LKS"}
-    assert body["scoring"]["weights"] == {
-        "type": 35,
-        "color": 15,
-        "size": 15,
-        "location": 10,
-        "material": 10,
-    }
-    assert body["scoring"]["auto_match_threshold"] == 80
+    assert "weights" not in body["scoring"]  # every criterion counts equally
+    assert body["scoring"]["auto_match_threshold"] == 100
 
 
 def test_openapi_lists_endpoints(client):

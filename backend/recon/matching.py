@@ -1,8 +1,10 @@
 """Score-based matching of the incoming list against the original inventory (v2).
 
-1. Every (existing unit, incoming row) pair gets a 0-100 score from the criteria in
-   ``config/scoring.yaml`` (type, colour, size, location, material).
-2. Automatic pairs need type, colour and size to agree and the score to reach the threshold.
+1. Every (existing unit, incoming row) pair gets a 0-100 score: the share of the criteria
+   (type, colour, size, location, material; all equally important) that could be compared
+   and agree.
+2. Automatic pairs need a full match (the threshold in ``config/scoring.yaml``, 100 %);
+   anything less is left for manual review.
    They are chosen by one global one-to-one assignment: first as many pairs as possible, then
    the highest total score.
 3. Among the assignments that are optimal by (2), ties are broken lexicographically (rule 3.2):
@@ -135,7 +137,6 @@ def incoming_items(incoming: SourceUpload) -> list[IncomingItem]:
 class Scorer:
     def __init__(self, items: list[IncomingItem], cfg: AppConfig):
         self.cfg = cfg
-        self.w = cfg.scoring.weights
         self.synonyms = {
             _norm(k): {_norm(k), *(_norm(v) for v in vs)}
             for k, vs in cfg.scoring.material_synonyms.items()
@@ -162,12 +163,9 @@ class Scorer:
         return any(words & self.synonyms.get(k, {k}) for k in p.materials)
 
     def checks(self, p: ExistingItem, s: IncomingItem) -> list[CriterionCheck]:
-        w = self.w
-
-        def check(c, weight, evaluable, match, existing, incoming):
+        def check(c, evaluable, match, existing, incoming):
             return CriterionCheck(
                 criterion=c,
-                weight=weight,
                 evaluable=evaluable,
                 match=match if evaluable else None,
                 existing=existing,
@@ -177,15 +175,13 @@ class Scorer:
         out = [
             check(
                 Criterion.TYPE,
-                w.type,
                 True,
                 p.sap_type is not None and _norm(p.sap_type) == _norm(s.item_name),
-                p.sap_type or f"{p.item_name} (no type rule)",
+                p.sap_type or p.item_name,
                 s.item_name,
             ),
             check(
                 Criterion.COLOR,
-                w.color,
                 bool(p.color and s.color),
                 _norm(p.color) == _norm(s.color),
                 p.color,
@@ -197,7 +193,6 @@ class Scorer:
             out.append(
                 check(
                     Criterion.SIZE,
-                    w.size,
                     s.width_cm is not None,
                     p.width_cm == s.width_cm,
                     f"{p.width_cm} cm",
@@ -209,7 +204,6 @@ class Scorer:
             out.append(
                 check(
                     Criterion.SIZE,
-                    w.size,
                     target is not None and s.width_cm is not None,
                     s.width_cm == target,
                     f"{p.size_word} ({target} cm)" if target else p.size_word,
@@ -219,7 +213,6 @@ class Scorer:
         out.append(
             check(
                 Criterion.LOCATION,
-                w.location,
                 bool(p.building and s.building),
                 p.building == s.building,
                 p.city,
@@ -229,7 +222,6 @@ class Scorer:
         out.append(
             check(
                 Criterion.MATERIAL,
-                w.material,
                 bool(p.materials and s.material),
                 bool(s.material) and self._material_match(p, s.material or ""),
                 ", ".join(p.materials) or None,
@@ -240,8 +232,8 @@ class Scorer:
 
     @staticmethod
     def units(checks: list[CriterionCheck]) -> int:
-        judged = sum(c.weight for c in checks if c.evaluable)
-        agreed = sum(c.weight for c in checks if c.evaluable and c.match)
+        judged = sum(c.evaluable for c in checks)
+        agreed = sum(bool(c.evaluable and c.match) for c in checks)
         return round(SCORE_UNITS * agreed / judged) if judged else 0
 
     @staticmethod
