@@ -42,23 +42,25 @@ def pairs(m: Matching):
 
 # --- golden: the sample files ---------------------------------------------------------------
 
-# incoming row -> (Asset ID, status). Rows 14 and 20 have no candidate.
+# incoming row -> (Asset ID, status). Only full (100 %) matches are automatic: rows 8 and 16
+# (best candidate in the other location), 14 (only a defective unit) and 20 (no unit left)
+# are left for manual review.
 EXPECTED = {
     2: ("84236836", RowStatus.AUTO_NEWEST),  # Work Desk 120 LKS: newest of three
     3: ("84253126", RowStatus.AUTO),
     4: ("84243715", RowStatus.AUTO),
     5: ("84243853", RowStatus.AUTO_NEWEST),  # Computer Desk RVS: newest of three RVS
     6: ("84296838", RowStatus.AUTO_NEWEST),  # Work Desk 160 LKS: newest of two
-    7: ("84273288", RowStatus.AUTO_NEWEST),  # Dining Table: the RVS unit, rows 7/8 compete
-    8: ("84261222", RowStatus.LOCATION_MISMATCH),  # newer of the two LKS units
+    7: ("84273288", RowStatus.AUTO_NEWEST),  # the only Riverside unit; rows 7/8 compete
+    8: (None, RowStatus.NO_CANDIDATE),  # only Lakeside Dining Tables left: location differs
     9: ("84278075", RowStatus.AUTO),
-    10: ("84277502", RowStatus.AUTO_NEWEST),
+    10: ("84261222", RowStatus.AUTO_NEWEST),  # newer of the two Lakeside units
     11: ("84255862", RowStatus.AUTO_NEWEST),
     12: ("84203792", RowStatus.AUTO),
     13: ("84235250", RowStatus.AUTO_NEWEST),
     14: (None, RowStatus.NO_CANDIDATE),  # the only RVS Writing Desk is defective
     15: ("84282058", RowStatus.AUTO_NEWEST),
-    16: ("84285415", RowStatus.LOCATION_MISMATCH),  # the LKS Computer Desk goes last
+    16: (None, RowStatus.NO_CANDIDATE),  # only the Lakeside Computer Desk is left
     17: ("84214252", RowStatus.AUTO_NEWEST),
     18: ("84298003", RowStatus.AUTO_NEWEST),
     19: ("84205455", RowStatus.AUTO_NEWEST),  # rows 19/20 compete for one unit
@@ -84,26 +86,26 @@ def test_sample_expected_result(sample):
 
 def test_sample_summary(sample):
     s = sample.result().summary
-    assert (s.incoming_rows, s.resolved, s.unresolved) == (20, 18, 2)
+    assert (s.incoming_rows, s.resolved, s.unresolved) == (20, 16, 4)
     assert s.status_counts == {
         "auto": 5,
         "auto_newest": 11,
-        "location_mismatch": 2,
+        "location_mismatch": 0,
         "manual": 0,
         "no_match": 0,
-        "no_candidate": 2,
+        "no_candidate": 4,
         "duplicate": 0,
     }
-    assert s.location_mismatches == 2
+    assert s.location_mismatches == 0
     assert s.existing_units == 81  # 84 rows minus 3 double entries
-    assert s.unpaired_existing == 81 - 7 - 18  # minus defective, minus paired
+    assert s.unpaired_existing == 81 - 7 - 16  # minus defective, minus paired
     assert s.export_ready is False
 
 
 def test_sample_newest_date_rule(sample):
     r = rows(sample)
     units = sample.unit_by_id
-    for group in ([2, 17, 18], [6, 11], [5, 13, 15]):
+    for group in ([2, 17, 18], [6, 11], [5, 13, 15], [10]):
         dates = [units[r[row].asset_id].activation_date for row in group]
         assert dates == sorted(dates, reverse=True), group  # file order gets newest first
 
@@ -118,11 +120,37 @@ def test_sample_defective_units_are_not_auto_candidates(sample):
     assert cands[0].existing.defective and cands[0].hard_ok
 
 
-def test_sample_warnings_on_rows(sample):
+def test_sample_less_than_full_match_is_left_for_review(sample):
     r = rows(sample)
     assert [n.code for n in r[21].notes] == ["deactivated"]
-    assert "location_mismatch" in [n.code for n in r[16].notes]
     assert [n.code for n in r[20].notes] == ["no_candidate"]
+    # row 16: the Lakeside Computer Desk agrees on everything but the location
+    (best,) = sample.candidates(16)
+    assert best.existing.asset_id == "84285415"
+    assert best.score == 75.0  # type, colour, material agree; location does not; size not judged
+    assert [c.criterion for c in best.checks if c.evaluable and not c.match] == [Criterion.LOCATION]
+    # assigning it by hand flags the location
+    sample_copy = Matching(sample.original, sample.incoming)
+    sample_copy.assign(16, "84285415", now=NOW)
+    row = rows(sample_copy)[16]
+    assert (row.status, row.location_mismatch) == (RowStatus.MANUAL, True)
+    assert "location_mismatch" in [n.code for n in row.notes]
+
+
+def test_every_criterion_counts_the_same():
+    """A pair that differs only in location scores the same as one that differs only in
+    material: no criterion weighs more than another."""
+    m = make(
+        [
+            phys(1, "table", "desk with monitor shelf, oak frame, black", "Lakeside"),
+            phys(2, "table", "desk with monitor shelf, steel frame, black", "Riverside"),
+        ],
+        [sap("Computer Desk", "Black", 120, "SN-1", "RVS")],  # material "Wood"
+    )
+    scores = {c.existing.asset_id: c.score for c in m.candidates(2)}
+    assert scores["1"] == scores["2"] == 75.0
+    assert pairs(m) == {}  # neither is a full match
+    assert rows(m)[2].status is RowStatus.NO_CANDIDATE
 
 
 # --- scoring --------------------------------------------------------------------------------
@@ -142,7 +170,7 @@ def test_score_leaves_out_what_cannot_be_judged():
         Criterion.LOCATION: False,
         Criterion.MATERIAL: True,
     }
-    assert c.score == pytest.approx(100 * 60 / 70, abs=0.01)
+    assert c.score == 75.0  # 3 of the 4 criteria that could be compared
 
 
 def test_hard_constraints_block_automatic_pairs():
@@ -209,11 +237,11 @@ def test_more_rows_than_units_leave_the_last_rows_open():
     assert r[3].status is RowStatus.NO_CANDIDATE
 
 
-def one_point_config():
-    """Weights where a location mismatch costs exactly one point: 100 vs 99."""
+def lower_threshold_config():
+    """The tie-break mechanism under a lower (configurable) threshold, where scores can differ
+    between automatic candidates: a same-location unit scores 100, another location 66.67."""
     cfg = default_config().model_copy(deep=True)
-    w = cfg.scoring.weights
-    w.type, w.color, w.location = 49, 50, 1
+    cfg.scoring.auto_match_threshold = 60
     return cfg
 
 
@@ -221,29 +249,38 @@ def test_tie_break_never_beats_a_real_score_difference():
     m = make(
         [
             phys(1, "chair", "on wheels, black", "Riverside", (2010, 1, 1)),  # older, 100
-            phys(2, "chair", "on wheels, black", "Lakeside", (2025, 1, 1)),  # newer, 99
+            phys(2, "chair", "on wheels, black", "Lakeside", (2025, 1, 1)),  # newer, 66.67
         ],
         [sap("Swivel Chair", "Black", 60, "SN-1", "RVS")],
-        one_point_config(),
+        lower_threshold_config(),
     )
     scores = {c.existing.asset_id: c.score for c in m.candidates(2)}
-    assert scores == {"1": 100, "2": 99}
+    assert scores == {"1": 100, "2": 66.67}
     assert pairs(m) == {2: "1"}
 
 
 @pytest.mark.parametrize("n", [2, 10, 40])
 def test_tie_break_is_subordinate_whatever_the_group_size(n):
-    """n rows compete; one old unit scores one point more than n newer ones."""
+    """n rows compete; one old unit scores more than n newer ones."""
     physical = [phys(1, "chair", "on wheels, black", "Riverside", (2000, 1, 1))] + [
         phys(100 + i, "chair", "on wheels, black", "Lakeside", (2020 + i, 1, 1)) for i in range(n)
     ]
     incoming = [sap("Swivel Chair", "Black", 60, f"SN-{i}", "RVS") for i in range(n)]
-    m = make(physical, incoming, one_point_config())
+    m = make(physical, incoming, lower_threshold_config())
     got = pairs(m)
     assert len(got) == n
     assert got[2] == "1"  # the first row takes the better-scoring, older unit
     # the rest take the newer units, newest first
     assert [got[r] for r in range(3, n + 2)] == [str(100 + i) for i in reversed(range(1, n))]
+
+
+def test_default_threshold_leaves_partial_matches_for_review():
+    m = make(
+        [phys(2, "chair", "on wheels, black", "Lakeside", (2025, 1, 1))],
+        [sap("Swivel Chair", "Black", 60, "SN-1", "RVS")],
+    )
+    assert pairs(m) == {}
+    assert [c.score for c in m.candidates(2)] == [66.67]
 
 
 # --- incoming duplicates --------------------------------------------------------------------

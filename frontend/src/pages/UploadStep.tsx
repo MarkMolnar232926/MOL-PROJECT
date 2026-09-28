@@ -114,7 +114,14 @@ function ErrorPanel({ error }: { error: unknown }) {
   return (
     <section role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
       <h3 className="font-semibold">{t.upload.errorTitle}</h3>
-      <p className="mt-1">{error instanceof ApiError ? error.message : errorText(t, error)}</p>
+      <p className="mt-1">{errorText(t, error)}</p>
+      {details.map((d) => (typeof d.looks_like === "string" ? t.upload.looksLike[d.looks_like] : null))
+        .filter(Boolean)
+        .map((hint, i) => (
+          <p key={i} className="mt-1">
+            {hint}
+          </p>
+        ))}
       {missing.length > 0 && (
         <ul className="mt-1 list-disc pl-5">
           {missing.map((d, i) => (

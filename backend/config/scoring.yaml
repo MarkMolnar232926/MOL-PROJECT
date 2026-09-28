@@ -1,19 +1,12 @@
-# Match score between an existing unit (original inventory) and an incoming row.
+# How an existing unit (original inventory) is compared with an incoming row.
 #
-# Each criterion that can be judged for a pair adds its weight when it agrees; criteria that
-# cannot be judged (e.g. the description names no material or size) are left out, and the score
-# is scaled to 0-100 over the weights that were judged.
+# Every criterion counts equally: type, colour, size, location and material. The score is the
+# share of the criteria that could be compared and agree. A criterion that cannot be compared
+# for a pair (e.g. the description states no size or no material) is left out.
 #
+# Only a 100% match is paired automatically; anything less is left for manual review.
 # The Serial No. is random and carries no date, so there is no year criterion.
-weights:
-  type: 35      # type rule (Item name + Description)  <->  Item Name
-  color: 15     # last Description token                <->  Color
-  size: 15      # "NNcm wide" or small/large (rule 1b)  <->  Width (cm)
-  location: 10  # City / Site code                      <->  Building
-  material: 10  # material keywords in Description      <->  Material
-
-# Automatic matching needs type, colour and size to agree and at least this score.
-auto_match_threshold: 80
+auto_match_threshold: 100
 
 # Words looked for (as whole words) in the Description; a word agrees with the incoming
 # Material if the Material contains it or one of its synonyms.

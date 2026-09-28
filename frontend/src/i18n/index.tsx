@@ -28,6 +28,7 @@ export function I18nProvider({ children, initial }: { children: ReactNode; initi
   const [language, setLanguageState] = useState<Language>(() => initial ?? initialLanguage());
   useEffect(() => {
     document.documentElement.lang = language;
+    document.title = LANGUAGES[language].appTitle;
   }, [language]);
   const setLanguage = (l: Language) => {
     setLanguageState(l);

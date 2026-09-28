@@ -79,17 +79,10 @@ class MatchingConfig(BaseModel):
     cost_weights: CostWeights = CostWeights()
 
 
-class ScoringWeights(BaseModel):
-    type: float = 35
-    color: float = 15
-    size: float = 15
-    location: float = 10
-    material: float = 10
-
-
 class ScoringConfig(BaseModel):
-    weights: ScoringWeights = ScoringWeights()
-    auto_match_threshold: float = 80
+    """Every criterion counts equally; only a full match is paired automatically."""
+
+    auto_match_threshold: float = Field(100, gt=0, le=100)
     material_keywords: list[str] = []
     material_synonyms: dict[str, list[str]] = {}
 

@@ -342,7 +342,7 @@ export function Assistant({
     if (e instanceof ApiError && e.code === "swap_required" && assetId) {
       setSwap({ kind, row, assetId, holder: Number(e.details[0]?.row) });
     } else {
-      setError(e instanceof ApiError ? e.message : errorText(t, e));
+      setError(errorText(t, e));
     }
   };
 
@@ -361,7 +361,7 @@ export function Assistant({
         confirm_swap: false,
       }),
     onSuccess: applied,
-    onError: (e) => setError(e instanceof ApiError ? e.message : errorText(t, e)),
+    onError: (e) => setError(errorText(t, e)),
   });
   const reset = useMutation({
     mutationFn: (v: { row: number; confirm?: boolean }) => api.reset(sessionId, v.row, v.confirm),

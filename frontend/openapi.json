@@ -952,10 +952,6 @@
           "criterion": {
             "$ref": "#/components/schemas/Criterion"
           },
-          "weight": {
-            "type": "number",
-            "title": "Weight"
-          },
           "evaluable": {
             "type": "boolean",
             "title": "Evaluable"
@@ -997,7 +993,6 @@
         "type": "object",
         "required": [
           "criterion",
-          "weight",
           "evaluable",
           "match",
           "existing",
@@ -2079,20 +2074,12 @@
       },
       "ScoringConfig": {
         "properties": {
-          "weights": {
-            "$ref": "#/components/schemas/ScoringWeights",
-            "default": {
-              "type": 35.0,
-              "color": 15.0,
-              "size": 15.0,
-              "location": 10.0,
-              "material": 10.0
-            }
-          },
           "auto_match_threshold": {
             "type": "number",
+            "maximum": 100.0,
+            "exclusiveMinimum": 0.0,
             "title": "Auto Match Threshold",
-            "default": 80
+            "default": 100
           },
           "material_keywords": {
             "items": {
@@ -2115,38 +2102,8 @@
           }
         },
         "type": "object",
-        "title": "ScoringConfig"
-      },
-      "ScoringWeights": {
-        "properties": {
-          "type": {
-            "type": "number",
-            "title": "Type",
-            "default": 35
-          },
-          "color": {
-            "type": "number",
-            "title": "Color",
-            "default": 15
-          },
-          "size": {
-            "type": "number",
-            "title": "Size",
-            "default": 15
-          },
-          "location": {
-            "type": "number",
-            "title": "Location",
-            "default": 10
-          },
-          "material": {
-            "type": "number",
-            "title": "Material",
-            "default": 10
-          }
-        },
-        "type": "object",
-        "title": "ScoringWeights"
+        "title": "ScoringConfig",
+        "description": "Every criterion counts equally; only a full match is paired automatically."
       },
       "SessionResult": {
         "properties": {

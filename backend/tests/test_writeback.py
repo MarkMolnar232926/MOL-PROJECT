@@ -65,8 +65,9 @@ def test_export_is_409_while_items_are_unresolved(client, samples):
     assert r.status_code == 409
     err = r.json()["error"]
     assert err["code"] == "unresolved_items"
-    assert err["details"][0]["rows"] == [14, 20]
-    no_pair(client, sid, 14)
+    assert err["details"][0]["rows"] == [8, 14, 16, 20]
+    for row in (8, 14, 16):
+        no_pair(client, sid, row)
     assert client.get(f"/api/sessions/{sid}/export").status_code == 409
     no_pair(client, sid, 20, "new_asset")
     assert client.get(f"/api/sessions/{sid}/export").status_code == 200
@@ -77,6 +78,12 @@ def test_export_integrity_on_the_sample(client, samples):
     incoming_hash = hashlib.sha256(INCOMING_FILE.read_bytes()).hexdigest()
     original, incoming = samples
     sid = start(client, original, incoming)
+    # rows 8 and 16: take the best (location differs) unit by hand; 14 and 20: no pair
+    for row, asset_id in ((8, "84277502"), (16, "84285415")):
+        r = client.put(
+            f"/api/sessions/{sid}/incoming/{row}/assignment", json={"asset_id": asset_id}
+        )
+        assert r.status_code == 200, r.text
     no_pair(client, sid, 14)
     no_pair(client, sid, 20)
     result = client.get(f"/api/sessions/{sid}/result").json()

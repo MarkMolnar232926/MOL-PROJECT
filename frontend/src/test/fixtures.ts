@@ -105,7 +105,6 @@ export function candidate(assetId: string, score: number, over: Partial<Candidat
     score,
     checks: CHECKS.map(([criterion, match]) => ({
       criterion,
-      weight: 10,
       evaluable: match !== null,
       match,
       existing: criterion === "location" ? "Riverside" : "x",

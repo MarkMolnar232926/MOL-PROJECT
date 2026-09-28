@@ -3,7 +3,7 @@ import type { IncomingResult, SessionResult } from "../api/client";
 import { Assistant } from "../components/Assistant";
 import { StatusBadge, Tag } from "../components/Badge";
 import { columnHelper, DataTable, type Columns } from "../components/DataTable";
-import { noteText, useT, type Messages } from "../i18n";
+import { noteText, useLanguage, useT, type Messages } from "../i18n";
 
 export type MatchingTab = "overview" | "resolve" | "all";
 
@@ -23,7 +23,7 @@ function Kpis({ result }: { result: SessionResult }) {
   const tiles: [string, string, number, string][] = [
     ["auto", t.matching.kpi.auto, n("auto"), "text-green-700"],
     ["newest", t.matching.kpi.newest, n("auto_newest"), "text-emerald-700"],
-    ["location", t.matching.kpi.location, n("location_mismatch"), "text-amber-700"],
+    ["location", t.matching.kpi.location, result.summary.location_mismatches, "text-amber-700"],
     ["unresolved", t.matching.kpi.unresolved, result.summary.unresolved, "text-red-700"],
     ["manual", t.matching.kpi.manual, n("manual"), "text-blue-700"],
     ["no-match", t.matching.kpi.noMatch, n("no_match"), "text-slate-700"],
@@ -59,6 +59,7 @@ function Remaining({ result, onQueue }: { result: SessionResult; onQueue: () => 
 
 function Overview({ result, onQueue }: { result: SessionResult; onQueue: () => void }) {
   const t = useT();
+  const { language } = useLanguage();
   return (
     <div className="space-y-4">
       <Kpis result={result} />
@@ -91,7 +92,7 @@ function Overview({ result, onQueue }: { result: SessionResult; onQueue: () => v
             <tbody>
               {result.log.map((e, i) => (
                 <tr key={i} className="border-t border-slate-100">
-                  <td className="px-2 py-1">{new Date(e.at).toLocaleTimeString()}</td>
+                  <td className="px-2 py-1">{new Date(e.at).toLocaleTimeString(language)}</td>
                   <td className="px-2 py-1">{e.row}</td>
                   <td className="px-2 py-1">{t.matching.logAction[e.action] ?? e.action}</td>
                   <td className="px-2 py-1 font-mono">{e.old_asset_id ?? "–"}</td>
