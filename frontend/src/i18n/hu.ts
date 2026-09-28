@@ -6,6 +6,26 @@ export const hu: Messages = {
   languageName: "Magyar",
   languageLabel: "Nyelv",
   appTitle: "Leltáregyeztetés",
+  tagline: "Az új bútorok eszközazonosítóinak kitöltése a meglévő leltárból",
+  guide: { label: "Mi a teendő most?", todoLabel: "Mi a teendő most?", doneLabel: "Kész" },
+  how: {
+    title: "Így működik",
+    original: "Eredeti leltár",
+    originalText: "Töltse fel a meglévő bútorok listáját az eszközazonosítókkal.",
+    incoming: "Új bútorlista",
+    incomingText: "Töltse fel az új bútorok listáját, amelyben az Asset ID még üres.",
+    matching: "Párosítás",
+    matchingText: "Az alkalmazás párosít mindent, amit tud; a többiről Ön dönt, egyenként.",
+    export: "Exportálás",
+    exportText: "Töltse le az új listát kitöltött eszközazonosítókkal.",
+  },
+  run: {
+    title: "Párosítás folyamatban…",
+    text: "Az új tételeket összevetjük a meglévő leltárral.",
+    stages: ["Mindkét lista beolvasása", "Minden tétel összevetése", "A legjobb párok kiválasztása"],
+    failed: "A párosítás nem futott le.",
+    retry: "Újrapróbálás",
+  },
   nav: { rules: "Szabályok", back: "Vissza a lépésekhez", newSession: "Újrakezdés" },
   newSessionConfirmTitle: "Újrakezdi?",
   newSessionConfirm: "Mindkét feltöltés és minden döntés elvész.",
@@ -24,15 +44,48 @@ export const hu: Messages = {
     done: "kész",
     current: "aktuális lépés",
     locked: "még nem érhető el",
+    hint: {
+      original: "Meglévő bútorok",
+      incoming: "Új bútorok",
+      matching: "Tételek párosítása",
+      export: "Fájl letöltése",
+    },
   },
 
   upload: {
-    originalTitle: "1. lépés – Eredeti leltár",
-    originalIntro:
-      "A meglévő bútorok, egységenként egy eszközazonosítóval (Asset ID). Ezt a fájlt csak olvassuk: soha nem módosítjuk, nem írjuk vissza és nem kínáljuk letöltésre.",
-    incomingTitle: "2. lépés – Új bútorlista",
-    incomingIntro:
-      "A beérkező bútorok listája üres Asset ID oszloppal. A párosítás a feltöltés után azonnal elindul.",
+    original: {
+      eyebrow: "1. lépés a 4-ből",
+      title: "Töltse fel az eredeti leltárt",
+      intro:
+        "A meglévő bútorok, egységenként egy eszközazonosítóval (Asset ID). Ezt a fájlt csak olvassuk: soha nem módosítjuk és nem kínáljuk letöltésre.",
+      todoTitle: "Válassza ki az eredeti leltár fájlját",
+      todoText:
+        "Húzza az Excel-fájlt az alábbi mezőbe (vagy kattintson rá a tallózáshoz), majd nyomja meg a Feltöltés gombot.",
+      doneTitle: "Az eredeti leltár rendben van",
+      doneText: "Nézze át az alábbi összesítést, majd folytassa az új bútorlistával.",
+      next: "Tovább az új bútorlistához",
+    },
+    incoming: {
+      eyebrow: "2. lépés a 4-ből",
+      title: "Töltse fel az új bútorlistát",
+      intro: "A beérkező bútorok listája üres Asset ID oszloppal. Az alkalmazás ezeket az azonosítókat tölti ki.",
+      todoTitle: "Válassza ki az új bútorlista fájlját",
+      todoText:
+        "Húzza az Excel-fájlt az alábbi mezőbe (vagy kattintson rá a tallózáshoz), majd nyomja meg a Feltöltés gombot.",
+      doneTitle: "Az új bútorlista rendben van",
+      doneText: "Nézze át az alábbi összesítést. Ha továbblép, elindul a párosítás.",
+      next: "Párosítás indítása",
+    },
+    fileTypes: "Excel-munkafüzet: .xlsx vagy .xlsm, legfeljebb 20 MB",
+    pickFirst: "Először válasszon fájlt.",
+    uploaded: "Feltöltve és ellenőrizve",
+    errorFix: "Ellenőrizze a fájlt és próbálja újra, vagy válasszon másik fájlt.",
+    statRows: "Sorok",
+    statDuplicateIds: "Ismétlődő azonosítók",
+    statDefective: "Hibás",
+    statItemTypes: "Tételtípusok",
+    statDuplicateRows: "Ismétlődő sorok",
+    statPrefilled: "Már kitöltött",
     fileLabel: {
       original: "Eredeti leltár (.xlsx / .xlsm)",
       incoming: "Új bútorlista (.xlsx / .xlsm)",
@@ -63,10 +116,6 @@ export const hu: Messages = {
     itemTypes: (n: number) => `${n} tételtípus`,
     rowsList: (rows: string) => `sorok: ${rows}`,
     issues: "Adathibák",
-    toIncoming: "Tovább az új bútorlistához",
-    toMatching: "Tovább a párosításhoz",
-    matched: (resolved: number, total: number) =>
-      `A párosítás kész: ${total} tételből ${resolved} automatikusan megoldva.`,
     replaceOriginalTitle: "Lecseréli az eredeti leltárt?",
     replaceOriginal: "Az új bútorlista és az eddigi összes döntés elvész.",
     replaceIncomingTitle: "Lecseréli az új bútorlistát?",
@@ -104,6 +153,33 @@ export const hu: Messages = {
   },
 
   matching: {
+    eyebrow: "3. lépés a 4-ből",
+    title: "Párosítás",
+    resolvedShort: "megoldva",
+    revealTitle: (auto: number, total: number) => `${total} tételből ${auto} automatikusan párosítva`,
+    revealText:
+      "Automatikusan csak azok a tételek párosulnak, amelyek minden szempontban egyeznek. Minden más az Ön döntésére vár.",
+    kpiHelp: {
+      auto: "Pontosan egy egység egyezik minden szempontban",
+      newest: "Több egység is egyezett; a legújabb lett kiválasztva",
+      unresolved: "Az Ön döntésére vár",
+      manual: "Ön párosította",
+      noMatch: "Jóváhagyva: nincs meglévő egység",
+      location: "Ön párosította, bár a helyszín eltér",
+    },
+    barTodo: (resolved: number, total: number, left: number) =>
+      `${total} tételből ${resolved} megoldva – még ${left} tétel vár az Ön döntésére`,
+    barDone: (total: number) => `Mind a ${total} tétel megoldva`,
+    resolveNext: "Következő megoldandó tétel",
+    toExport: "Tovább az exportáláshoz",
+    todoTitle: (n: number) => `${n} tétel vár az Ön döntésére`,
+    todoAction: "Tételek átnézése",
+    todoText:
+      "Ezeknél nem volt 100%-os egyezés. Nézze át őket egyenként: válassza ki a megfelelő meglévő tételt, vagy jelölje, hogy nincs párja.",
+    todoTextResolve:
+      "Nézze meg a középen lévő tételt, vesse össze a jobb oldali jelöltekkel, majd nyomja meg a Hozzárendel gombot – vagy a Nincs pár gombot, ha egyik sem megfelelő.",
+    doneTitle: "Minden tétel megoldva",
+    doneText: "Szép munka. Lépjen tovább az exportáláshoz a fájl letöltéséhez.",
     tabsLabel: "Párosítási nézetek",
     tabs: { overview: "Áttekintés", resolve: "Megoldandó tételek", all: "Összes tétel" },
     kpi: {
@@ -114,9 +190,6 @@ export const hu: Messages = {
       manual: "Kézzel párosítva",
       noMatch: "Nincs pár",
     },
-    remaining: (n: number) => `Még ${n} tétel vár megoldásra`,
-    allResolved: "Minden tétel megoldva – exportálhat.",
-    toQueue: "Megoldásuk",
     warnings: "Figyelmeztetések",
     open: "Megnyitás",
     filter: "Sorok szűrése",
@@ -172,6 +245,9 @@ export const hu: Messages = {
     confirmNoPair: "Jóváhagyás",
     shortcuts: "Billentyűk: ↑/↓ jelölt választása · Enter hozzárendelés · N nincs pár · J következő tétel",
     unpaired: (n: number) => `Pár nélküli meglévő tételek (${n})`,
+    bestMatch: "Legjobb egyezés",
+    allDoneTitle: "Szép munka – minden tétel megoldva!",
+    allDoneText: (n: number) => `${n} tételt oldott meg. A fájl exportálható.`,
     unpairedHint: "Ezek segíthetnek felismerni például egy elírt helyszínt.",
   },
 
@@ -203,7 +279,19 @@ export const hu: Messages = {
   },
 
   exportStep: {
-    title: "4. lépés – Exportálás",
+    eyebrow: "4. lépés a 4-ből",
+    title: "Exportálás",
+    notReadyTitle: (n: number) => `Még ${n} tétel vár döntésre`,
+    readyTitle: "Töltse le a kész fájlt",
+    doneTitle: "Letöltve!",
+    doneText: (file: string) =>
+      `A(z) ${file} elmentve. Letöltheti újra, vagy új egyeztetést kezdhet.`,
+    startOver: "Új egyeztetés indítása",
+    fileLabel: "A kapott fájl",
+    filled: "Kitöltött Asset ID",
+    empty: "Üresen marad (nincs pár)",
+    untouched: "A fájlban minden más pontosan úgy marad, ahogy feltöltötte.",
+    again: "Letöltés újra",
     intro:
       "Letölti az új bútorlistát a feltöltött formájában, csak az Asset ID oszlopot kitöltve. A pár nélküli tételek Asset ID-ja üres marad. Ez az egyetlen letöltés; az eredeti leltárt soha nem exportáljuk.",
     button: "Fájl letöltése",
@@ -211,7 +299,7 @@ export const hu: Messages = {
     remaining: (n: number) =>
       `Az exportálás akkor érhető el, ha minden tétel megoldott: még ${n} tétel van hátra.`,
     toQueue: "Ugrás a megoldandó tételekhez",
-    ready: "Minden tétel megoldott.",
+    ready: "Minden tétel megoldott. A gombra kattintva letöltheti a fájlt az eszközazonosítókkal.",
   },
 
   // Hibaüzenetek a szerver hibakódja szerint.

@@ -15,7 +15,6 @@ function renderStep(props: Partial<Parameters<typeof UploadStep>[0]> = {}) {
       <UploadStep
         kind="original"
         state={sessionState()}
-        match={undefined}
         ensureSession={async () => "s1"}
         onUploaded={() => {}}
         onContinue={() => {}}
@@ -50,7 +49,7 @@ test("several fitting sheets: the user picks one", async () => {
     });
   renderStep();
   await userEvent.upload(screen.getByLabelText("Original inventory (.xlsx / .xlsm)"), file());
-  await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Upload$/ }));
   await userEvent.selectOptions(await screen.findByLabelText("Sheet"), "Feb");
   await userEvent.click(screen.getByRole("button", { name: "Use this sheet" }));
   await waitFor(() => expect(upload).toHaveBeenLastCalledWith("s1", expect.any(File), "Feb"));
@@ -75,9 +74,11 @@ test("replacing the original inventory asks for confirmation", async () => {
   });
   renderStep({ state });
   expect(screen.getByTestId("original-summary")).toHaveTextContent("o.xlsx › Munka1 (found by column headers) – 84 rows");
-  await userEvent.click(screen.getByRole("button", { name: "Upload a different file" }));
+  expect(screen.getByTestId("guide")).toHaveTextContent("The original inventory is ready");
+  expect(screen.getByRole("button", { name: /Continue to the new furniture list/ })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /Upload a different file/ }));
   await userEvent.upload(screen.getByLabelText("Original inventory (.xlsx / .xlsm)"), file());
-  await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Upload$/ }));
   expect(screen.getByRole("alertdialog")).toHaveTextContent(
     "The incoming list and every decision made so far will be discarded.",
   );
@@ -94,6 +95,13 @@ test("the missing columns of a rejected file are listed", async () => {
   );
   renderStep({ kind: "incoming" });
   await userEvent.upload(screen.getByLabelText("Incoming furniture list (.xlsx / .xlsm)"), file());
-  await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Upload$/ }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Export: missing Serial No.");
+});
+
+test("an empty step tells the user what to do", () => {
+  renderStep();
+  expect(screen.getByTestId("guide")).toHaveTextContent("Choose the original inventory file");
+  expect(screen.getByText("How it works")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^Upload$/ })).toBeDisabled();
 });

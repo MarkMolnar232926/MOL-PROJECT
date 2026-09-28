@@ -111,6 +111,7 @@ export const api = {
     request<OriginalUploaded>(`/sessions/${sid}/original`, upload(file, sheet)),
   uploadIncoming: (sid: string, file: File, sheet?: string | null) =>
     request<IncomingUploaded>(`/sessions/${sid}/incoming`, upload(file, sheet)),
+  match: (sid: string) => request<SessionResult>(`/sessions/${sid}/match`, { method: "POST" }),
   result: (sid: string) => request<SessionResult>(`/sessions/${sid}/result`),
   candidates: (sid: string, row: number, f: CandidateFilters) => {
     const params = new URLSearchParams();

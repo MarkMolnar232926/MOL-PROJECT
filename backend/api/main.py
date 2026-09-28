@@ -214,7 +214,7 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
         "/sessions/{session_id}/incoming",
         response_model=IncomingUploaded,
         responses=UPLOAD_ERRORS,
-        summary="Step 2: upload the incoming furniture list; matching runs right away",
+        summary="Step 2: upload the incoming furniture list",
     )
     async def upload_incoming(
         file: UploadFile = File(description="The incoming furniture list workbook"),
@@ -222,8 +222,8 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
         session: Session = Depends(get_session),
         store: SessionStore = Depends(get_store),
     ) -> IncomingUploaded:
-        """409 until the original inventory is uploaded. Uploading again replaces the list and
-        discards every decision."""
+        """409 until the original inventory is uploaded. Matching does not start yet: see
+        ``POST /match``. Uploading again discards an earlier matching and its decisions."""
         if session.original is None:
             raise StepOrderError(
                 "Upload the original inventory first; the incoming list is matched against it."
@@ -231,14 +231,26 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
         upload = read_upload(await _read_upload(file), "sap", sheet, session.cfg)
         discarded = session.set_incoming(upload)
         store.save(session)
-        res = session.require_matching().result()
         return IncomingUploaded(
             session_id=session.session_id,
             incoming=_incoming(session),
             discarded_decisions=discarded,
-            summary=res.summary,
-            warnings=res.warnings,
         )
+
+    @router.post(
+        "/sessions/{session_id}/match",
+        response_model=SessionResult,
+        responses=STEP_ERRORS,
+        summary="Step 3: start the matching",
+    )
+    def start_matching(
+        session: Session = Depends(get_session), store: SessionStore = Depends(get_store)
+    ) -> SessionResult:
+        """Runs the matching once both files are uploaded (409 before). Calling it again
+        returns the existing result with its decisions."""
+        session.run_matching()
+        store.save(session)
+        return _result(session)
 
     @router.get(
         "/sessions/{session_id}/result", response_model=SessionResult, responses=STEP_ERRORS

@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "./api/client";
 import { ConfirmDialog } from "./components/Dialog";
+import { Icon } from "./components/Icon";
+import { MatchingRun } from "./components/MatchingRun";
 import { Stepper, type Step } from "./components/Stepper";
 import { useStoredState } from "./hooks/useStoredState";
 import { LANGUAGES, useLanguage, useT, type Language } from "./i18n";
@@ -17,7 +19,7 @@ function LanguageSwitcher() {
     <label className="flex items-center gap-2 text-sm text-slate-700">
       <span>{t.languageLabel}</span>
       <select
-        className="input"
+        className="input text-slate-900"
         value={language}
         onChange={(e) => setLanguage(e.target.value as Language)}
       >
@@ -71,6 +73,7 @@ export default function App() {
     if (placed || (sessionId && !state.data)) return;
     setPlaced(true);
     const s = state.data;
+    // Matching only starts when the user opens the Matching step.
     setStep(!s?.original ? "original" : !s.matched ? "incoming" : "matching");
   }, [placed, sessionId, state.data]);
 
@@ -86,16 +89,20 @@ export default function App() {
   const available: Record<Step, boolean> = {
     original: true,
     incoming: Boolean(state.data?.original),
-    matching: matched,
+    matching: Boolean(state.data?.incoming),
     export: matched,
   };
   const done: Record<Step, boolean> = {
     original: Boolean(state.data?.original),
-    incoming: matched,
+    incoming: Boolean(state.data?.incoming),
     matching: Boolean(summary?.export_ready),
     export: false,
   };
   const current: Step = available[step] ? step : "original";
+  const toExport = () => {
+    setStep("export");
+    window.scrollTo?.({ top: 0 });
+  };
   const toQueue = () => {
     setTab("resolve");
     setStep("matching");
@@ -113,30 +120,42 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 flex flex-wrap items-center gap-4 border-b border-slate-200 bg-white px-6 py-3">
-        <h1 className="text-lg font-semibold">{t.appTitle}</h1>
-        {!showRules && (
-          <Stepper
-            current={current}
-            available={available}
-            done={done}
-            onSelect={(s) => {
-              setStep(s);
-              setShowRules(false);
-            }}
-          />
-        )}
-        <div className="ml-auto flex items-center gap-3">
-          {sessionId && state.data?.original && !showRules && (
-            <button type="button" className="btn-secondary" onClick={() => setConfirmNew(true)}>
-              {t.nav.newSession}
-            </button>
-          )}
-          <button type="button" className="btn-secondary" onClick={() => setShowRules(!showRules)}>
-            {showRules ? t.nav.back : t.nav.rules}
-          </button>
-          <LanguageSwitcher />
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-6 py-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+              <Icon name="link" />
+            </span>
+            <div>
+              <h1 className="text-lg font-bold leading-tight">{t.appTitle}</h1>
+              <p className="text-xs text-indigo-100">{t.tagline}</p>
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2 [&_label]:text-indigo-50">
+              {sessionId && state.data?.original && !showRules && (
+                <button type="button" className="rounded-lg px-3 py-1.5 text-sm font-medium text-white hover:bg-white/15" onClick={() => setConfirmNew(true)}>
+                  {t.nav.newSession}
+                </button>
+              )}
+              <button type="button" className="rounded-lg px-3 py-1.5 text-sm font-medium text-white hover:bg-white/15" onClick={() => setShowRules(!showRules)}>
+                {showRules ? t.nav.back : t.nav.rules}
+              </button>
+              <LanguageSwitcher />
+            </div>
+          </div>
         </div>
+        {!showRules && (
+          <div className="mx-auto max-w-7xl px-6 py-3">
+            <Stepper
+              current={current}
+              available={available}
+              done={done}
+              onSelect={(s) => {
+                setStep(s);
+                setShowRules(false);
+              }}
+            />
+          </div>
+        )}
       </header>
       {health.isError && (
         <p role="alert" className="bg-red-600 px-6 py-2 text-sm text-white">
@@ -148,7 +167,7 @@ export default function App() {
           {t.expired}
         </p>
       )}
-      <main className="p-6">
+      <main className="px-6 pb-6 pt-6">
         {showRules ? (
           <RulesPage />
         ) : (
@@ -158,14 +177,17 @@ export default function App() {
                 key={current}
                 kind={current}
                 state={state.data}
-                match={summary}
                 ensureSession={ensureSession}
                 onUploaded={() => setUploads((n) => n + 1)}
                 onContinue={() => setStep(current === "original" ? "incoming" : "matching")}
               />
             )}
             {/* Kept mounted while other steps show, so the queue and its progress survive. */}
-            {sessionId && result.data && (
+            {current === "matching" && sessionId && !matched && state.data?.incoming && (
+              <MatchingRun key={uploads} sessionId={sessionId} onDone={() => setTab("overview")} />
+            )}
+            {/* Kept mounted while other steps show, so the queue and its progress survive. */}
+            {sessionId && matched && result.data && (
               <div hidden={current !== "matching"}>
                 <MatchingStep
                   key={uploads}
@@ -174,13 +196,22 @@ export default function App() {
                   tab={tab}
                   setTab={setTab}
                   active={current === "matching"}
+                  onExport={toExport}
                 />
               </div>
             )}
             {current === "export" && sessionId && result.data && (
-              <ExportStep sessionId={sessionId} result={result.data} onQueue={toQueue} />
+              <ExportStep
+                sessionId={sessionId}
+                result={result.data}
+                incomingName={state.data?.incoming?.sheet.file_name}
+                onQueue={toQueue}
+                onStartOver={() => setConfirmNew(true)}
+              />
             )}
-            {(current === "matching" || current === "export") && result.isPending && <p>{t.loading}</p>}
+            {matched && (current === "matching" || current === "export") && result.isPending && (
+              <p>{t.loading}</p>
+            )}
           </>
         )}
       </main>

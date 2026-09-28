@@ -25,6 +25,7 @@ def start(client, original: bytes, incoming: bytes, incoming_name="sap_export.xl
     assert r.status_code == 200, r.text
     r = client.post(f"/api/sessions/{sid}/incoming", files={"file": (incoming_name, incoming)})
     assert r.status_code == 200, r.text
+    assert client.post(f"/api/sessions/{sid}/match").status_code == 200
     return sid
 
 

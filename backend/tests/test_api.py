@@ -42,6 +42,7 @@ def test_openapi_lists_endpoints(client):
         "/api/sessions/{session_id}",
         "/api/sessions/{session_id}/original",
         "/api/sessions/{session_id}/incoming",
+        "/api/sessions/{session_id}/match",
         "/api/sessions/{session_id}/result",
         "/api/sessions/{session_id}/incoming/{row}/candidates",
         "/api/sessions/{session_id}/incoming/{row}/assignment",

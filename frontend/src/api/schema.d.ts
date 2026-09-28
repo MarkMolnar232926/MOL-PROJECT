@@ -110,11 +110,32 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Step 2: upload the incoming furniture list; matching runs right away
-         * @description 409 until the original inventory is uploaded. Uploading again replaces the list and
-         *     discards every decision.
+         * Step 2: upload the incoming furniture list
+         * @description 409 until the original inventory is uploaded. Matching does not start yet: see
+         *     ``POST /match``. Uploading again discards an earlier matching and its decisions.
          */
         post: operations["upload_incoming_api_sessions__session_id__incoming_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Step 3: start the matching
+         * @description Runs the matching once both files are uploaded (409 before). Calling it again
+         *     returns the existing result with its decisions.
+         */
+        post: operations["start_matching_api_sessions__session_id__match_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -471,11 +492,11 @@ export interface components {
             /** Session Id */
             session_id: string;
             incoming: components["schemas"]["IncomingUpload"];
-            /** Discarded Decisions */
+            /**
+             * Discarded Decisions
+             * @description True if an earlier matching result (and its decisions) was discarded.
+             */
             discarded_decisions: boolean;
-            summary: components["schemas"]["MatchSummary"];
-            /** Warnings */
-            warnings: components["schemas"]["Note"][];
         };
         /** Location */
         Location: {
@@ -951,6 +972,55 @@ export interface operations {
             };
             /** @description File too large */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid input */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_matching_api_sessions__session_id__match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResult"];
+                };
+            };
+            /** @description Unknown session or row */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A previous step is not done yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

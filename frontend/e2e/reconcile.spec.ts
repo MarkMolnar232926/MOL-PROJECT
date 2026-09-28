@@ -10,6 +10,7 @@ const INCOMING = path.join(FIXTURES, "sap_export.xlsx");
 
 async function uploadBoth(page: Page) {
   await page.goto("/");
+  await expect(page.getByTestId("guide")).toContainText("Choose the original inventory file");
   await expect(page.getByTestId("step-incoming")).toBeDisabled();
   await page.getByLabel("Original inventory (.xlsx / .xlsm)").setInputFiles(ORIGINAL);
   await page.getByRole("button", { name: "Upload", exact: true }).click();
@@ -17,14 +18,17 @@ async function uploadBoth(page: Page) {
     "physical_inventory.xlsx › Munka1 (found by column headers) – 84 rows",
   );
   await expect(page.getByTestId("step-matching")).toBeDisabled();
-  await page.getByRole("button", { name: "Continue to the incoming list" }).click();
+  await page.getByRole("button", { name: "Continue to the new furniture list" }).click();
 
   await page.getByLabel("Incoming furniture list (.xlsx / .xlsm)").setInputFiles(INCOMING);
   await page.getByRole("button", { name: "Upload", exact: true }).click();
-  await expect(page.getByTestId("matched-summary")).toHaveText(
-    "Matching done: 16 of 20 items resolved automatically.",
-  );
-  await page.getByRole("button", { name: "Go to matching" }).click();
+  await expect(page.getByTestId("incoming-summary")).toContainText("20 rows");
+  // the upload alone does not match anything yet
+  await expect(page.getByTestId("step-export")).toBeDisabled();
+  await expect(page.getByTestId("guide")).toContainText("When you continue, the matching starts");
+  await page.getByRole("button", { name: "Start the matching" }).click();
+  await expect(page.getByTestId("matching-run")).toBeVisible();
+  await expect(page.getByTestId("match-reveal")).toContainText("16 of 20 items were matched automatically");
   await expect(page.getByTestId("kpi-unresolved")).toHaveText("4");
 }
 
@@ -40,6 +44,7 @@ test("upload both files, resolve the open items, export", async ({ page }) => {
   await uploadBoth(page);
 
   // export is locked while items are open
+  await expect(page.getByRole("button", { name: "Continue to export" })).toBeDisabled();
   await page.getByTestId("step-export").click();
   await expect(page.getByRole("button", { name: "Download file" })).toBeDisabled();
   await expect(page.getByTestId("export-remaining")).toContainText("4 items left");
@@ -69,13 +74,17 @@ test("upload both files, resolve the open items, export", async ({ page }) => {
   await expect(page.getByTestId("item-card")).toContainText("Incoming row 20");
   await noPair(page, "New asset, not in the inventory yet");
   await expect(page.getByTestId("queue-progress")).toHaveText("4 / 4 resolved");
+  await expect(page.getByTestId("all-done")).toContainText("Well done – every item is resolved!");
   await expect(page.getByTestId("step-matching")).toHaveAttribute("data-done", "true");
+  await expect(page.getByTestId("next-step-status")).toHaveText("All 20 items are resolved");
 
-  await page.getByTestId("step-export").click();
+  await page.getByTestId("guide").getByRole("button", { name: "Continue to export" }).click();
+  await expect(page.getByTestId("export-filled")).toHaveText("18");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download file" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("sap_export_asset_id.xlsx");
+  await expect(page.getByTestId("export-done")).toContainText("sap_export_asset_id.xlsx has been saved");
   const ids = assetIds(await download.path());
   expect(ids).toHaveLength(20);
   expect(ids.filter(Boolean)).toHaveLength(18);

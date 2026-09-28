@@ -1,4 +1,5 @@
 import { useT } from "../i18n";
+import { Icon } from "./Icon";
 
 export type Step = "original" | "incoming" | "matching" | "export";
 export const STEPS: Step[] = ["original", "incoming", "matching", "export"];
@@ -15,12 +16,18 @@ export function Stepper({ current, available, done, onSelect }: Props) {
   const t = useT();
   return (
     <nav aria-label={t.steps.label}>
-      <ol className="flex flex-wrap gap-2">
+      <ol className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {STEPS.map((step, i) => {
           const active = step === current;
-          const state = active ? t.steps.current : done[step] ? t.steps.done : !available[step] ? t.steps.locked : "";
+          const state = active
+            ? t.steps.current
+            : done[step]
+              ? t.steps.done
+              : !available[step]
+                ? t.steps.locked
+                : "";
           return (
-            <li key={step}>
+            <li key={step} className="relative">
               <button
                 type="button"
                 onClick={() => onSelect(step)}
@@ -28,23 +35,34 @@ export function Stepper({ current, available, done, onSelect }: Props) {
                 aria-current={active ? "step" : undefined}
                 data-testid={`step-${step}`}
                 data-done={done[step] || undefined}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                   active
-                    ? "border-blue-700 bg-blue-700 text-white"
+                    ? "border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
                     : done[step]
-                      ? "border-green-600 bg-green-50 text-green-800"
-                      : "border-slate-300 bg-white text-slate-700"
-                } disabled:cursor-not-allowed disabled:opacity-40`}
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                      : available[step]
+                        ? "border-slate-200 bg-white text-slate-800 hover:border-indigo-300"
+                        : "border-slate-200 bg-slate-50 text-slate-400"
+                } disabled:cursor-not-allowed`}
               >
                 <span
                   aria-hidden="true"
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
-                    active ? "bg-white text-blue-700" : done[step] ? "bg-green-600 text-white" : "bg-slate-200"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                    active
+                      ? "bg-white text-indigo-700"
+                      : done[step]
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-200 text-slate-600"
                   }`}
                 >
-                  {done[step] && !active ? "✓" : i + 1}
+                  {done[step] && !active ? <Icon name="check" className="h-4 w-4" /> : i + 1}
                 </span>
-                <span>{t.steps[step]}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{t.steps[step]}</span>
+                  <span className={`block truncate text-xs ${active ? "text-indigo-100" : "opacity-70"}`}>
+                    {t.steps.hint[step]}
+                  </span>
+                </span>
                 {state && <span className="sr-only">({state})</span>}
               </button>
             </li>
