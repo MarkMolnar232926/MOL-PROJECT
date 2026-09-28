@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-from fastapi import APIRouter, Depends, FastAPI, File, Request, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,7 +20,15 @@ from recon import (
     normalize,
     validate_tie_assignments,
 )
+from recon.errors import StepOrderError
 from recon.export import export_filename, export_workbook
+from recon.intake import (
+    SourceUpload,
+    read_upload,
+    sheet_info,
+    summarize_incoming,
+    summarize_original,
+)
 from recon.models import ManualDecision, TieGroup
 
 from .schemas import (
@@ -28,8 +36,13 @@ from .schemas import (
     DetectedSheet,
     ErrorResponse,
     HealthResponse,
+    IncomingUpload,
+    IncomingUploaded,
+    OriginalUpload,
+    OriginalUploaded,
     SessionCreated,
     SessionResult,
+    SessionState,
     TieDecisionRequest,
 )
 from .sessions import InMemorySessionStore, Session, SessionStore
@@ -53,6 +66,34 @@ ERRORS = {
     404: {"model": ErrorResponse, "description": "Unknown session or tie group"},
     422: {"model": ErrorResponse, "description": "Invalid input"},
 }
+STEP_ERRORS = {
+    **ERRORS,
+    409: {"model": ErrorResponse, "description": "A previous step is not done yet"},
+}
+UPLOAD_ERRORS = {**STEP_ERRORS, 413: {"model": ErrorResponse, "description": "File too large"}}
+
+
+def _original(session: Session) -> OriginalUpload | None:
+    up = session.original
+    if up is None:
+        return None
+    return OriginalUpload(sheet=sheet_info(up), summary=summarize_original(up, session.cfg))
+
+
+def _incoming(session: Session) -> IncomingUpload | None:
+    up = session.incoming
+    if up is None:
+        return None
+    return IncomingUpload(sheet=sheet_info(up), summary=summarize_incoming(up))
+
+
+def _state(session: Session) -> SessionState:
+    return SessionState(
+        session_id=session.session_id,
+        original=_original(session),
+        incoming=_incoming(session),
+        matched=session.matched,
+    )
 
 
 def _detected(session: Session) -> list[DetectedSheet]:
@@ -104,6 +145,13 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             )
         return session
 
+    def matched_session(session: Session = Depends(get_session)) -> Session:
+        if session.result is None:
+            raise StepOrderError(
+                "Matching has not run yet: upload the original inventory and the incoming list."
+            )
+        return session
+
     def find_group(session: Session, group_id: str) -> TieGroup:
         for g in session.result.tie_groups:
             if g.group_id == group_id:
@@ -125,7 +173,8 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
 
     @app.exception_handler(ReconError)
     async def _recon_error(_: Request, exc: ReconError):
-        return _error(422, exc.code, exc.message, exc.details)
+        status = 409 if isinstance(exc, StepOrderError) else 422
+        return _error(status, exc.code, exc.message, exc.details)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError):
@@ -163,17 +212,25 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
 
     @router.post(
         "/sessions",
-        response_model=SessionCreated,
+        response_model=SessionState | SessionCreated,
         status_code=201,
         responses={**ERRORS, 413: {"model": ErrorResponse, "description": "File too large"}},
-        summary="Upload one workbook, or physical + SAP files, and run matching",
+        summary="Create an empty session (legacy: upload one workbook or physical + SAP)",
     )
     async def create_session(
-        workbook: UploadFile | None = File(None, description="One workbook with both sheets"),
-        physical: UploadFile | None = File(None, description="Physical_Inventory file"),
-        sap: UploadFile | None = File(None, description="SAP_Export file"),
+        workbook: UploadFile | None = File(None, description="Legacy: one workbook"),
+        physical: UploadFile | None = File(None, description="Legacy: Physical_Inventory file"),
+        sap: UploadFile | None = File(None, description="Legacy: SAP_Export file"),
         store: SessionStore = Depends(get_store),
-    ) -> SessionCreated:
+    ) -> SessionState | SessionCreated:
+        """Without files: a new, empty session; upload the original inventory next.
+
+        The legacy multipart upload (``workbook``, or ``physical`` + ``sap``) still works until
+        the new UI replaces it.
+        """
+        c: AppConfig = app.state.cfg
+        if workbook is None and physical is None and sap is None:
+            return _state(store.create(c))
         if workbook is not None and physical is None and sap is None:
             files = [await _read_upload(workbook, None)]
         elif workbook is None and physical is not None and sap is not None:
@@ -182,8 +239,24 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             raise InvalidFileError(
                 "Upload either one file as 'workbook', or two files as 'physical' and 'sap'."
             )
-        c: AppConfig = app.state.cfg
-        session = store.create(normalize(load_inputs(files, c), c), c)
+        loaded = load_inputs(files, c)
+        data = normalize(loaded, c)
+        session = store.create(c)
+        for source, frame in (("physical", data.physical), ("sap", data.sap)):
+            sheet = loaded.sheet(source)
+            file = next((f for f in files if f.name == sheet.file_name), files[0])
+            upload = SourceUpload(
+                file=file,
+                sheet=sheet,
+                frame=frame,
+                issues=[i for i in data.issues if i.source == source],
+            )
+            if source == "physical":
+                session.set_original(upload)
+            else:
+                session.set_incoming(upload)
+        session.result.warnings[:0] = loaded.warnings
+        store.save(session)
         return SessionCreated(
             session_id=session.session_id,
             detected=_detected(session),
@@ -191,15 +264,74 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             summary=session.result.summary,
         )
 
-    @router.get("/sessions/{session_id}/result", response_model=SessionResult, responses=ERRORS)
-    def get_result(session: Session = Depends(get_session)) -> SessionResult:
+    @router.get("/sessions/{session_id}", response_model=SessionState, responses=ERRORS)
+    def get_state(session: Session = Depends(get_session)) -> SessionState:
+        """Which steps are done: the uploads (with their summaries) and whether matching ran."""
+        return _state(session)
+
+    @router.post(
+        "/sessions/{session_id}/original",
+        response_model=OriginalUploaded,
+        responses=UPLOAD_ERRORS,
+        summary="Step 1: upload the original inventory (read only, never modified)",
+    )
+    async def upload_original(
+        file: UploadFile = File(description="The original inventory workbook"),
+        sheet: str | None = Form(None, description="Sheet to read; needed if several fit"),
+        session: Session = Depends(get_session),
+        store: SessionStore = Depends(get_store),
+    ) -> OriginalUploaded:
+        """Uploading again replaces the original inventory and discards the incoming list and
+        every decision (the UI asks for confirmation first). A failed upload changes nothing."""
+        upload = read_upload(await _read_upload(file, None), "physical", sheet, session.cfg)
+        discarded = session.set_original(upload)
+        store.save(session)
+        return OriginalUploaded(
+            session_id=session.session_id,
+            original=_original(session),
+            discarded_later_steps=discarded,
+        )
+
+    @router.post(
+        "/sessions/{session_id}/incoming",
+        response_model=IncomingUploaded,
+        responses=UPLOAD_ERRORS,
+        summary="Step 2: upload the incoming furniture list; matching runs right away",
+    )
+    async def upload_incoming(
+        file: UploadFile = File(description="The incoming furniture list workbook"),
+        sheet: str | None = Form(None, description="Sheet to read; needed if several fit"),
+        session: Session = Depends(get_session),
+        store: SessionStore = Depends(get_store),
+    ) -> IncomingUploaded:
+        """409 until the original inventory is uploaded. Uploading again replaces the list and
+        discards every decision."""
+        if session.original is None:
+            raise StepOrderError(
+                "Upload the original inventory first; the incoming list is matched against it."
+            )
+        upload = read_upload(await _read_upload(file, None), "sap", sheet, session.cfg)
+        discarded = session.set_incoming(upload)
+        store.save(session)
+        return IncomingUploaded(
+            session_id=session.session_id,
+            incoming=_incoming(session),
+            discarded_decisions=discarded,
+            summary=session.result.summary,
+            warnings=session.result.warnings,
+        )
+
+    @router.get(
+        "/sessions/{session_id}/result", response_model=SessionResult, responses=STEP_ERRORS
+    )
+    def get_result(session: Session = Depends(matched_session)) -> SessionResult:
         return result_of(session)
 
     @router.put("/sessions/{session_id}/ties/{group_id}", response_model=TieGroup, responses=ERRORS)
     def decide_tie(
         group_id: str,
         body: TieDecisionRequest,
-        session: Session = Depends(get_session),
+        session: Session = Depends(matched_session),
         store: SessionStore = Depends(get_store),
     ) -> TieGroup:
         group = find_group(session, group_id)
@@ -226,7 +358,7 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
     )
     def reset_tie(
         group_id: str,
-        session: Session = Depends(get_session),
+        session: Session = Depends(matched_session),
         store: SessionStore = Depends(get_store),
     ) -> TieGroup:
         """Forget the decisions for this group; its slots go back to the suggestion."""
@@ -239,12 +371,12 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
     @router.get(
         "/sessions/{session_id}/export",
         responses={
-            **ERRORS,
+            **STEP_ERRORS,
             200: {"content": {XLSX_MEDIA_TYPE: {}}, "description": "The reconciled workbook"},
         },
         response_class=Response,
     )
-    def export(session: Session = Depends(get_session)) -> Response:
+    def export(session: Session = Depends(matched_session)) -> Response:
         name = export_filename()
         body = export_workbook(session.data.loaded, session.result)
         return Response(

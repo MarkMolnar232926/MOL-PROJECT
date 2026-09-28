@@ -76,6 +76,8 @@ def test_openapi_lists_endpoints(client):
         "/api/config",
         "/api/sessions",
         "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}/original",
+        "/api/sessions/{session_id}/incoming",
         "/api/sessions/{session_id}/result",
         "/api/sessions/{session_id}/ties/{group_id}",
         "/api/sessions/{session_id}/export",
@@ -111,11 +113,10 @@ def test_upload_two_files(client):
         {"workbook": ("notes.csv", b"a,b\n1,2")},
         {"workbook": ("fake.xlsx", b"not a zip")},
         {"physical": ("p.xlsx", build_workbook({"x": [["a"]]}))},  # sap missing
-        {},
     ],
 )
 def test_bad_uploads_are_422(client, files):
-    r = client.post("/api/sessions", files=files) if files else client.post("/api/sessions")
+    r = client.post("/api/sessions", files=files)
     assert r.status_code == 422
     err = r.json()["error"]
     assert err["code"] in {"invalid_file", "invalid_request"}

@@ -1,8 +1,9 @@
 """Read the uploaded workbook(s) and locate the Physical_Inventory and SAP_Export sheets.
 
-Input is either one workbook holding both sheets or two files (one per source).
-Each source is found by sheet name first, then by header signature. Sheets listed in
-``ignored_sheets`` (the hidden Answer_Key) are never opened.
+``load_source`` reads one uploaded file for one source (the two-step upload): the sheet is the
+one the user picked, else found by sheet name, else by header signature; when several sheets
+fit, the user has to pick one. ``load_inputs`` is the older one-workbook / two-file mode.
+Sheets listed in ``ignored_sheets`` (the hidden Answer_Key) are never opened.
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .config import AppConfig, Source, SourceSpec, default_config, normalize_header
-from .errors import InvalidFileError, MissingColumnsError, SheetDetectionError
+from .errors import (
+    InvalidFileError,
+    MissingColumnsError,
+    SheetChoiceRequiredError,
+    SheetDetectionError,
+)
 from .messages import Note, note
 
 ALLOWED_EXTENSIONS = (".xlsx", ".xlsm")
@@ -25,7 +31,7 @@ SOURCES: tuple[Source, ...] = ("physical", "sap")
 SOURCE_LABELS = {"physical": "Physical_Inventory", "sap": "SAP_Export"}
 EXCEL_ROW = "excel_row"
 
-DetectedBy = Literal["sheet_name", "header_signature"]
+DetectedBy = Literal["sheet_name", "header_signature", "user_choice"]
 
 
 @dataclass
@@ -46,6 +52,7 @@ class SheetData:
     frame: pd.DataFrame  # one column per original header + EXCEL_ROW
     missing_optional: list[str] = field(default_factory=list)
     column_fills: dict[str, str] = field(default_factory=dict)  # header -> ARGB of whole column
+    sheets_available: list[str] = field(default_factory=list)  # readable sheets of the file
 
     @property
     def row_count(self) -> int:
@@ -205,21 +212,167 @@ def _choose(
     return {"source": source, "file": None, "sheet": None, "missing_columns": None}
 
 
+def _sheet_data(
+    source: Source, cand: _Candidate, ws: Worksheet, detected_by: DetectedBy, spec: SourceSpec
+) -> SheetData:
+    frame, column_fills = _read_frame(ws, cand.headers)
+    labels = [c for c in frame.columns if c != EXCEL_ROW]
+    mapping = _map_columns(labels, spec)
+    return SheetData(
+        source=source,
+        file_name=cand.file.name,
+        sheet_name=cand.sheet_name,
+        detected_by=detected_by,
+        headers=labels,
+        column_map=mapping,
+        frame=frame,
+        column_fills=column_fills,
+        missing_optional=[c.display_name for k, c in spec.columns.items() if k not in mapping],
+    )
+
+
+def _candidates(file: InputFile, wb, cfg: AppConfig, index: int = 0) -> list[_Candidate]:
+    ignored = {normalize_header(n) for n in cfg.columns.ignored_sheets}
+    return [
+        _Candidate(file, index, name, _header_row(wb[name]))
+        for name in wb.sheetnames
+        if normalize_header(name) not in ignored
+    ]
+
+
+def load_source(
+    file: InputFile, source: Source, sheet: str | None = None, cfg: AppConfig | None = None
+) -> SheetData:
+    """Read the ``source`` table from one uploaded file.
+
+    The sheet is ``sheet`` when given, else the one with an expected sheet name, else the only
+    sheet whose headers contain every required column. Several fitting sheets raise
+    ``SheetChoiceRequiredError`` listing them, so the user can pick one.
+    """
+    cfg = cfg or default_config()
+    spec = cfg.columns.source(source)
+    label = SOURCE_LABELS[source]
+    other: Source = "sap" if source == "physical" else "physical"
+    wb = _open_workbook(file)
+    try:
+        cands = _candidates(file, wb, cfg)
+        names = [c.sheet_name for c in cands]
+
+        def missing(c: _Candidate) -> list[str]:
+            return _missing_required(_map_columns(c.headers, spec), spec)
+
+        def fail_missing(c: _Candidate, how: str):
+            cols = missing(c)
+            raise MissingColumnsError(
+                f"{label} (sheet '{c.sheet_name}' in '{file.name}') is missing required "
+                f"column(s): {', '.join(cols)}.",
+                [
+                    {
+                        **_where(source, file, c.sheet_name, names),
+                        "missing_columns": cols,
+                        "detected_by": how,
+                    }
+                ],
+            )
+
+        if sheet is not None:
+            wanted = normalize_header(sheet)
+            chosen = next((c for c in cands if normalize_header(c.sheet_name) == wanted), None)
+            if chosen is None:
+                raise SheetDetectionError(
+                    f"'{file.name}' has no sheet named '{sheet}'. "
+                    f"Sheets found: {', '.join(names) or 'none'}.",
+                    [{**_where(source, file, None, names), "requested_sheet": sheet}],
+                )
+            if missing(chosen):
+                fail_missing(chosen, "user_choice")
+            how: DetectedBy = "user_choice"
+        else:
+            wanted_names = {normalize_header(n) for n in spec.sheet_names}
+            by_name = [c for c in cands if normalize_header(c.sheet_name) in wanted_names]
+            fitting = [c for c in cands if not missing(c)]
+            named_ok = [c for c in by_name if not missing(c)]
+            if named_ok:
+                chosen, how = named_ok[0], "sheet_name"
+            elif by_name:  # a sheet with the expected name is authoritative
+                fail_missing(by_name[0], "sheet_name")
+            elif len(fitting) == 1:
+                chosen, how = fitting[0], "header_signature"
+            elif len(fitting) > 1:
+                raise SheetChoiceRequiredError(
+                    f"'{file.name}' has several sheets that look like a {label} table. "
+                    "Pick the sheet to use.",
+                    [
+                        {
+                            **_where(source, file, None, names),
+                            "matching_sheets": [c.sheet_name for c in fitting],
+                        }
+                    ],
+                )
+            else:
+                _raise_not_found(source, other, file, cands, names, cfg)
+        sheet_data = _sheet_data(source, chosen, wb[chosen.sheet_name], how, spec)
+        sheet_data.sheets_available = names
+        return sheet_data
+    finally:
+        wb.close()
+
+
+def _where(source: Source, file: InputFile, sheet: str | None, names: list[str]) -> dict:
+    return {"source": source, "file": file.name, "sheet": sheet, "sheets_seen": names}
+
+
+def _raise_not_found(
+    source: Source,
+    other: Source,
+    file: InputFile,
+    cands: list[_Candidate],
+    names: list[str],
+    cfg: AppConfig,
+) -> None:
+    spec, other_spec = cfg.columns.source(source), cfg.columns.source(other)
+    label = SOURCE_LABELS[source]
+    # The closest partial match, so the user sees which columns are missing.
+    best, best_found = None, 0
+    for c in cands:
+        found = len(spec.required_keys) - len(
+            _missing_required(_map_columns(c.headers, spec), spec)
+        )
+        if found > best_found:
+            best, best_found = c, found
+    looks_like_other = any(
+        not _missing_required(_map_columns(c.headers, other_spec), other_spec) for c in cands
+    )
+    hint = (
+        f" This file looks like a {SOURCE_LABELS[other]} table; check that it was uploaded in "
+        "the right step."
+        if looks_like_other
+        else ""
+    )
+    if best is not None and best_found * 2 >= len(spec.required_keys) and not looks_like_other:
+        cols = _missing_required(_map_columns(best.headers, spec), spec)
+        raise MissingColumnsError(
+            f"{label} (sheet '{best.sheet_name}' in '{file.name}') is missing required "
+            f"column(s): {', '.join(cols)}.",
+            [{**_where(source, file, best.sheet_name, names), "missing_columns": cols}],
+        )
+    raise SheetDetectionError(
+        f"No {label} sheet found in '{file.name}' (looked by sheet name and by column "
+        f"headers).{hint}",
+        [{**_where(source, file, None, names), "looks_like": other if looks_like_other else None}],
+    )
+
+
 def load_inputs(files: list[InputFile], cfg: AppConfig | None = None) -> LoadedInput:
     """Load one workbook with both sheets, or two files with one source each."""
     cfg = cfg or default_config()
     if not 1 <= len(files) <= 2:
         raise InvalidFileError("Upload either one workbook or two files (physical + SAP).")
-    ignored = {normalize_header(n) for n in cfg.columns.ignored_sheets}
-
     workbooks = [_open_workbook(f) for f in files]
     try:
         candidates: list[_Candidate] = []
         for idx, (file, wb) in enumerate(zip(files, workbooks, strict=True)):
-            for name in wb.sheetnames:
-                if normalize_header(name) in ignored:
-                    continue
-                candidates.append(_Candidate(file, idx, name, _header_row(wb[name])))
+            candidates.extend(_candidates(file, wb, cfg, idx))
 
         chosen: dict[Source, tuple[_Candidate, DetectedBy]] = {}
         problems: list[dict] = []
@@ -249,22 +402,7 @@ def load_inputs(files: list[InputFile], cfg: AppConfig | None = None) -> LoadedI
                     )
                 )
             ws = workbooks[cand.workbook_index][cand.sheet_name]
-            frame, column_fills = _read_frame(ws, cand.headers)
-            labels = [c for c in frame.columns if c != EXCEL_ROW]
-            mapping = _map_columns(labels, spec)
-            sheets[source] = SheetData(
-                source=source,
-                file_name=cand.file.name,
-                sheet_name=cand.sheet_name,
-                detected_by=detected_by,
-                headers=labels,
-                column_map=mapping,
-                frame=frame,
-                column_fills=column_fills,
-                missing_optional=[
-                    c.display_name for k, c in spec.columns.items() if k not in mapping
-                ],
-            )
+            sheets[source] = _sheet_data(source, cand, ws, detected_by, spec)
         return LoadedInput(physical=sheets["physical"], sap=sheets["sap"], warnings=warnings)
     finally:
         for wb in workbooks:

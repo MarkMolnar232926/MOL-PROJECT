@@ -10,7 +10,11 @@ import pytest
 from openpyxl import Workbook
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PRACTICE_FILE = REPO_ROOT / "tests" / "fixtures" / "Inventory_Reconciliation_Practice_1.xlsx"
+FIXTURES = REPO_ROOT / "tests" / "fixtures"
+PRACTICE_FILE = FIXTURES / "Inventory_Reconciliation_Practice_1.xlsx"
+# The practice workbook split into the two uploads (scripts/make_fixtures.py).
+ORIGINAL_FILE = FIXTURES / "original.xlsx"
+INCOMING_FILE = FIXTURES / "incoming.xlsx"
 
 PHYSICAL_HEADERS = [
     "Asset ID",
