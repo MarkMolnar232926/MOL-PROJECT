@@ -143,6 +143,12 @@ export const en = {
       `Manual decision for SAP row ${p.sap_row} was dropped: that row no longer needs a decision.`,
     location_mismatch: (p) => `Physical says ${p.city}, SAP says ${p.building}.`,
     deactivated: () => "Deactivated but present in SAP (has a deactivation date).",
+    incoming_duplicate: (p) => `Identical to row ${p.first} of the incoming list.`,
+    no_candidate: (p) => `No free existing unit of this type, colour and size reaches ${p.threshold}%.`,
+    tie_newest: () =>
+      "Several existing units fit equally well; the one with the newest activation date was chosen.",
+    released_by_swap: (p) => `Its automatic pair (${p.asset_id}) was given to another row.`,
+    defective_chosen: () => "The chosen unit is marked defective.",
     year_gap: (p) => `Activation year and serial year differ by ${p.gap}.`,
   } as Record<string, (p: MessageParams) => string>,
 

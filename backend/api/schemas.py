@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from recon.config import CostWeights, Location, TypeRule
+from recon.config import Location, ScoringConfig, TypeRule
 from recon.intake import IncomingSummary, OriginalSummary, SheetInfo
-from recon.loader import DetectedBy
+from recon.match_models import MatchResult, MatchSummary, NoMatchReason
 from recon.messages import Note
-from recon.models import ReconResult, Summary, TieAssignment
 
 
 class HealthResponse(BaseModel):
@@ -21,17 +20,8 @@ class ConfigResponse(BaseModel):
     rules_version: str
     type_rules: list[TypeRule]
     locations: list[Location]
-    cost_weights: CostWeights
+    scoring: ScoringConfig
     excluded_statuses: list[str]
-
-
-class DetectedSheet(BaseModel):
-    source: Literal["physical", "sap"]
-    file_name: str
-    sheet_name: str
-    detected_by: DetectedBy
-    row_count: int
-    missing_optional_columns: list[str]
 
 
 class OriginalUpload(BaseModel):
@@ -57,7 +47,7 @@ class OriginalUploaded(BaseModel):
     session_id: str
     original: OriginalUpload
     discarded_later_steps: bool = Field(
-        description="True if an incoming list and/or decisions existed and were discarded."
+        description="True if an incoming list (and its decisions) existed and was discarded."
     )
 
 
@@ -65,28 +55,33 @@ class IncomingUploaded(BaseModel):
     session_id: str
     incoming: IncomingUpload
     discarded_decisions: bool
-    summary: Summary  # matching summary (matching runs right after the upload)
+    summary: MatchSummary  # matching runs right after the upload
     warnings: list[Note]
 
 
-class SessionCreated(BaseModel):
-    """Response of the legacy one-shot upload (removed in phase 5)."""
-
+class SessionResult(MatchResult):
     session_id: str
-    detected: list[DetectedSheet]
-    warnings: list[Note]
-    summary: Summary
 
 
-class SessionResult(ReconResult):
-    session_id: str
-    detected: list[DetectedSheet]
-
-
-class TieDecisionRequest(BaseModel):
-    assignments: list[TieAssignment] = Field(
-        description="One entry per SAP row to decide; physical_asset_id null = leave unmatched."
+class AssignmentRequest(BaseModel):
+    asset_id: str | None = Field(
+        description="Asset ID from the original inventory; null = the item has no existing pair."
     )
+    reason: NoMatchReason | None = Field(
+        None, description="Required when asset_id is null; 'other' also needs a note."
+    )
+    note: str | None = None
+    confirm_swap: bool = Field(
+        False, description="Take the unit even if another row holds it (that row is released)."
+    )
+
+
+class AssignmentResponse(BaseModel):
+    row: int
+    released_row: int | None = Field(
+        description="Row that lost its unit in a swap and is back among the items to resolve."
+    )
+    result: SessionResult
 
 
 class ErrorBody(BaseModel):

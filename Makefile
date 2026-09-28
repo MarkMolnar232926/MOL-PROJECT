@@ -49,9 +49,11 @@ preview:
 docker:
 	docker compose up --build
 
-# Matching summary: counts and tie groups
+# Matching summary: statuses and the rows decided by the newest-date rule
+ORIGINAL ?= tests/fixtures/physical_inventory.xlsx
+INCOMING ?= tests/fixtures/sap_export.xlsx
 report:
-	cd backend && $(PY) -m recon.report $(abspath $(FILE))
+	cd backend && $(PY) -m recon.report $(abspath $(ORIGINAL)) $(abspath $(INCOMING))
 
 # Reconciled workbook, e.g. make export OUT=out.xlsx ARGS=--accept-suggestions
 OUT ?= reconciled.xlsx

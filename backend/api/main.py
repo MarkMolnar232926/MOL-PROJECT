@@ -1,55 +1,42 @@
-"""FastAPI wrapper around the recon engine (PLAN.md section 7.3)."""
+"""FastAPI wrapper around the recon engine (change request v2, section 7)."""
 
 from __future__ import annotations
 
-import datetime as dt
 import logging
 
-from fastapi import APIRouter, Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from recon import (
-    AppConfig,
-    InputFile,
-    InvalidFileError,
-    ReconError,
-    default_config,
-    load_inputs,
-    normalize,
-    validate_tie_assignments,
-)
+from recon import AppConfig, InputFile, ReconError, default_config, reconcile
 from recon.errors import StepOrderError
 from recon.export import export_filename, export_workbook
-from recon.intake import (
-    SourceUpload,
-    read_upload,
-    sheet_info,
-    summarize_incoming,
-    summarize_original,
-)
-from recon.models import ManualDecision, TieGroup
+from recon.intake import combine, read_upload, sheet_info, summarize_incoming, summarize_original
+from recon.match_models import Candidate
+from recon.matching import SwapRequiredError, UnknownRowError
 
 from .schemas import (
+    AssignmentRequest,
+    AssignmentResponse,
     ConfigResponse,
-    DetectedSheet,
     ErrorResponse,
     HealthResponse,
     IncomingUpload,
     IncomingUploaded,
     OriginalUpload,
     OriginalUploaded,
-    SessionCreated,
     SessionResult,
     SessionState,
-    TieDecisionRequest,
 )
 from .sessions import InMemorySessionStore, Session, SessionStore
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 log = logging.getLogger("recon.api")
+
+CONFLICTS = (StepOrderError, SwapRequiredError)  # -> 409
+NOT_FOUND = (UnknownRowError,)  # -> 404
 
 
 class ApiError(Exception):
@@ -63,7 +50,7 @@ def _error(status: int, code: str, message: str, details: list | None = None) ->
 
 
 ERRORS = {
-    404: {"model": ErrorResponse, "description": "Unknown session or tie group"},
+    404: {"model": ErrorResponse, "description": "Unknown session or row"},
     422: {"model": ErrorResponse, "description": "Invalid input"},
 }
 STEP_ERRORS = {
@@ -71,6 +58,14 @@ STEP_ERRORS = {
     409: {"model": ErrorResponse, "description": "A previous step is not done yet"},
 }
 UPLOAD_ERRORS = {**STEP_ERRORS, 413: {"model": ErrorResponse, "description": "File too large"}}
+ASSIGN_ERRORS = {
+    **ERRORS,
+    409: {
+        "model": ErrorResponse,
+        "description": "Matching has not run, or the unit belongs to another row "
+        "(code swap_required: repeat with confirm_swap)",
+    },
+}
 
 
 def _original(session: Session) -> OriginalUpload | None:
@@ -96,22 +91,12 @@ def _state(session: Session) -> SessionState:
     )
 
 
-def _detected(session: Session) -> list[DetectedSheet]:
-    loaded = session.data.loaded
-    return [
-        DetectedSheet(
-            source=sheet.source,
-            file_name=sheet.file_name,
-            sheet_name=sheet.sheet_name,
-            detected_by=sheet.detected_by,
-            row_count=sheet.row_count,
-            missing_optional_columns=sheet.missing_optional,
-        )
-        for sheet in (loaded.physical, loaded.sap)
-    ]
+def _result(session: Session) -> SessionResult:
+    res = session.require_matching().result()
+    return SessionResult(**dict(res), session_id=session.session_id)
 
 
-async def _read_upload(upload: UploadFile, role: str | None) -> InputFile:
+async def _read_upload(upload: UploadFile) -> InputFile:
     name = upload.filename or "upload.xlsx"
     data = await upload.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
@@ -121,14 +106,15 @@ async def _read_upload(upload: UploadFile, role: str | None) -> InputFile:
             f"'{name}' is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
             [{"file": name}],
         )
-    return InputFile(name=name, data=data, role=role)  # type: ignore[arg-type]
+    return InputFile(name=name, data=data)
 
 
 def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) -> FastAPI:
     app = FastAPI(
         title="Inventory Reconciliation API",
-        version="0.4.0",
-        description="Match a physical stocktake against an SAP export and fill in Asset IDs.",
+        version="0.5.0",
+        description="Fill in the Asset IDs of an incoming furniture list from the original "
+        "inventory. The original inventory is only read.",
     )
     app.state.store = store if store is not None else InMemorySessionStore()
     app.state.cfg = cfg if cfg is not None else default_config()
@@ -145,26 +131,6 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             )
         return session
 
-    def matched_session(session: Session = Depends(get_session)) -> Session:
-        if session.result is None:
-            raise StepOrderError(
-                "Matching has not run yet: upload the original inventory and the incoming list."
-            )
-        return session
-
-    def find_group(session: Session, group_id: str) -> TieGroup:
-        for g in session.result.tie_groups:
-            if g.group_id == group_id:
-                return g
-        raise ApiError(404, "tie_group_not_found", f"Tie group '{group_id}' does not exist.")
-
-    def result_of(session: Session) -> SessionResult:
-        return SessionResult(
-            **dict(session.result),
-            session_id=session.session_id,
-            detected=_detected(session),
-        )
-
     # -- exception mapping: always structured JSON, never a stack trace --
 
     @app.exception_handler(ApiError)
@@ -173,7 +139,7 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
 
     @app.exception_handler(ReconError)
     async def _recon_error(_: Request, exc: ReconError):
-        status = 409 if isinstance(exc, StepOrderError) else 422
+        status = 409 if isinstance(exc, CONFLICTS) else 404 if isinstance(exc, NOT_FOUND) else 422
         return _error(status, exc.code, exc.message, exc.details)
 
     @app.exception_handler(RequestValidationError)
@@ -206,63 +172,14 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             rules_version=c.type_rules.version,
             type_rules=c.type_rules.rules,
             locations=c.locations,
-            cost_weights=c.matching.cost_weights,
+            scoring=c.scoring,
             excluded_statuses=c.matching.excluded_statuses,
         )
 
-    @router.post(
-        "/sessions",
-        response_model=SessionState | SessionCreated,
-        status_code=201,
-        responses={**ERRORS, 413: {"model": ErrorResponse, "description": "File too large"}},
-        summary="Create an empty session (legacy: upload one workbook or physical + SAP)",
-    )
-    async def create_session(
-        workbook: UploadFile | None = File(None, description="Legacy: one workbook"),
-        physical: UploadFile | None = File(None, description="Legacy: Physical_Inventory file"),
-        sap: UploadFile | None = File(None, description="Legacy: SAP_Export file"),
-        store: SessionStore = Depends(get_store),
-    ) -> SessionState | SessionCreated:
-        """Without files: a new, empty session; upload the original inventory next.
-
-        The legacy multipart upload (``workbook``, or ``physical`` + ``sap``) still works until
-        the new UI replaces it.
-        """
-        c: AppConfig = app.state.cfg
-        if workbook is None and physical is None and sap is None:
-            return _state(store.create(c))
-        if workbook is not None and physical is None and sap is None:
-            files = [await _read_upload(workbook, None)]
-        elif workbook is None and physical is not None and sap is not None:
-            files = [await _read_upload(physical, "physical"), await _read_upload(sap, "sap")]
-        else:
-            raise InvalidFileError(
-                "Upload either one file as 'workbook', or two files as 'physical' and 'sap'."
-            )
-        loaded = load_inputs(files, c)
-        data = normalize(loaded, c)
-        session = store.create(c)
-        for source, frame in (("physical", data.physical), ("sap", data.sap)):
-            sheet = loaded.sheet(source)
-            file = next((f for f in files if f.name == sheet.file_name), files[0])
-            upload = SourceUpload(
-                file=file,
-                sheet=sheet,
-                frame=frame,
-                issues=[i for i in data.issues if i.source == source],
-            )
-            if source == "physical":
-                session.set_original(upload)
-            else:
-                session.set_incoming(upload)
-        session.result.warnings[:0] = loaded.warnings
-        store.save(session)
-        return SessionCreated(
-            session_id=session.session_id,
-            detected=_detected(session),
-            warnings=session.result.warnings,
-            summary=session.result.summary,
-        )
+    @router.post("/sessions", response_model=SessionState, status_code=201)
+    def create_session(store: SessionStore = Depends(get_store)) -> SessionState:
+        """A new, empty session. Upload the original inventory next."""
+        return _state(store.create(app.state.cfg))
 
     @router.get("/sessions/{session_id}", response_model=SessionState, responses=ERRORS)
     def get_state(session: Session = Depends(get_session)) -> SessionState:
@@ -283,7 +200,7 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
     ) -> OriginalUploaded:
         """Uploading again replaces the original inventory and discards the incoming list and
         every decision (the UI asks for confirmation first). A failed upload changes nothing."""
-        upload = read_upload(await _read_upload(file, None), "physical", sheet, session.cfg)
+        upload = read_upload(await _read_upload(file), "physical", sheet, session.cfg)
         discarded = session.set_original(upload)
         store.save(session)
         return OriginalUploaded(
@@ -310,63 +227,79 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
             raise StepOrderError(
                 "Upload the original inventory first; the incoming list is matched against it."
             )
-        upload = read_upload(await _read_upload(file, None), "sap", sheet, session.cfg)
+        upload = read_upload(await _read_upload(file), "sap", sheet, session.cfg)
         discarded = session.set_incoming(upload)
         store.save(session)
+        res = session.require_matching().result()
         return IncomingUploaded(
             session_id=session.session_id,
             incoming=_incoming(session),
             discarded_decisions=discarded,
-            summary=session.result.summary,
-            warnings=session.result.warnings,
+            summary=res.summary,
+            warnings=res.warnings,
         )
 
     @router.get(
         "/sessions/{session_id}/result", response_model=SessionResult, responses=STEP_ERRORS
     )
-    def get_result(session: Session = Depends(matched_session)) -> SessionResult:
-        return result_of(session)
+    def get_result(session: Session = Depends(get_session)) -> SessionResult:
+        """Summary, the status of every incoming row, warnings, unpaired units, decision log."""
+        return _result(session)
 
-    @router.put("/sessions/{session_id}/ties/{group_id}", response_model=TieGroup, responses=ERRORS)
-    def decide_tie(
-        group_id: str,
-        body: TieDecisionRequest,
-        session: Session = Depends(matched_session),
+    @router.get(
+        "/sessions/{session_id}/incoming/{row}/candidates",
+        response_model=list[Candidate],
+        responses=STEP_ERRORS,
+    )
+    def get_candidates(
+        row: int,
+        include_paired: bool = Query(False, description="Also units assigned to other rows"),
+        include_other_types: bool = Query(False, description="Also units of other types"),
+        include_defective: bool = Query(False, description="Also defective units"),
+        q: str | None = Query(None, description="Search Asset ID, description, custodian"),
+        session: Session = Depends(get_session),
+    ) -> list[Candidate]:
+        """Existing units for one incoming row, best first (a QR-code match always leads)."""
+        return session.require_matching().candidates(
+            row, include_paired, include_other_types, include_defective, q
+        )
+
+    @router.put(
+        "/sessions/{session_id}/incoming/{row}/assignment",
+        response_model=AssignmentResponse,
+        responses=ASSIGN_ERRORS,
+    )
+    def put_assignment(
+        row: int,
+        body: AssignmentRequest,
+        session: Session = Depends(get_session),
         store: SessionStore = Depends(get_store),
-    ) -> TieGroup:
-        group = find_group(session, group_id)
-        validate_tie_assignments(group, body.assignments)
-        proposed = {s.sap_row: s.suggested_asset_id for s in group.slots}
-        now = dt.datetime.now(dt.UTC)
-        changing = {a.sap_row for a in body.assignments}
-        session.decisions = [d for d in session.decisions if d.sap_row not in changing] + [
-            ManualDecision(
-                group_id=group_id,
-                sap_row=a.sap_row,
-                asset_id=a.physical_asset_id,
-                proposed_asset_id=proposed[a.sap_row],
-                decided_at=now,
-            )
-            for a in body.assignments
-        ]
-        session.rerun()
+    ) -> AssignmentResponse:
+        """Pair the row with a unit, or mark it as having no pair (reason required).
+
+        If the unit belongs to another row the answer is 409 ``swap_required`` describing the
+        swap; with ``confirm_swap`` that row is released back to the items to resolve."""
+        released = session.require_matching().assign(
+            row, body.asset_id, body.reason, body.note, body.confirm_swap
+        )
         store.save(session)
-        return find_group(session, group_id)
+        return AssignmentResponse(row=row, released_row=released, result=_result(session))
 
     @router.delete(
-        "/sessions/{session_id}/ties/{group_id}", response_model=TieGroup, responses=ERRORS
+        "/sessions/{session_id}/incoming/{row}/assignment",
+        response_model=AssignmentResponse,
+        responses=ASSIGN_ERRORS,
     )
-    def reset_tie(
-        group_id: str,
-        session: Session = Depends(matched_session),
+    def delete_assignment(
+        row: int,
+        confirm_swap: bool = Query(False, description="Take back the unit from another row"),
+        session: Session = Depends(get_session),
         store: SessionStore = Depends(get_store),
-    ) -> TieGroup:
-        """Forget the decisions for this group; its slots go back to the suggestion."""
-        rows = set(find_group(session, group_id).sap_rows)
-        session.decisions = [d for d in session.decisions if d.sap_row not in rows]
-        session.rerun()
+    ) -> AssignmentResponse:
+        """Back to the automatic suggestion."""
+        released = session.require_matching().reset(row, confirm_swap)
         store.save(session)
-        return find_group(session, group_id)
+        return AssignmentResponse(row=row, released_row=released, result=_result(session))
 
     @router.get(
         "/sessions/{session_id}/export",
@@ -376,9 +309,12 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
         },
         response_class=Response,
     )
-    def export(session: Session = Depends(matched_session)) -> Response:
+    def export(session: Session = Depends(get_session)) -> Response:
+        # Interim: the previous multi-sheet report. Replaced by the Asset-ID-only export next.
+        session.require_matching()
+        data = combine(session.original, session.incoming)
         name = export_filename()
-        body = export_workbook(session.data.loaded, session.result)
+        body = export_workbook(data.loaded, reconcile(data, session.cfg))
         return Response(
             content=body,
             media_type=XLSX_MEDIA_TYPE,

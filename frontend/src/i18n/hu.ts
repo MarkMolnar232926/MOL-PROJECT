@@ -139,6 +139,12 @@ export const hu: Messages = {
       `A(z) ${p.sap_row}. SAP-sorra hozott kézi döntést elvetettük: ez a sor már nem igényel döntést.`,
     location_mismatch: (p) => `A leltár szerint ${p.city}, az SAP szerint ${p.building}.`,
     deactivated: () => "Deaktiválva, mégis szerepel az SAP-ban (van deaktiválási dátuma).",
+    incoming_duplicate: (p) => `Identical to row ${p.first} of the incoming list.`,
+    no_candidate: (p) => `No free existing unit of this type, colour and size reaches ${p.threshold}%.`,
+    tie_newest: () =>
+      "Several existing units fit equally well; the one with the newest activation date was chosen.",
+    released_by_swap: (p) => `Its automatic pair (${p.asset_id}) was given to another row.`,
+    defective_chosen: () => "The chosen unit is marked defective.",
     year_gap: (p) => `Az aktiválás éve és a sorozatszám éve ${p.gap} évvel eltér.`,
   },
 

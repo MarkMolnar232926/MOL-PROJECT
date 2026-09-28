@@ -12,9 +12,9 @@ from openpyxl import Workbook
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 PRACTICE_FILE = FIXTURES / "Inventory_Reconciliation_Practice_1.xlsx"
-# The practice workbook split into the two uploads (scripts/make_fixtures.py).
-ORIGINAL_FILE = FIXTURES / "original.xlsx"
-INCOMING_FILE = FIXTURES / "incoming.xlsx"
+# The sample uploads: the original inventory and the incoming furniture list.
+ORIGINAL_FILE = FIXTURES / "physical_inventory.xlsx"
+INCOMING_FILE = FIXTURES / "sap_export.xlsx"
 
 PHYSICAL_HEADERS = [
     "Asset ID",
