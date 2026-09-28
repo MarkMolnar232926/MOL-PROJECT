@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from recon import AppConfig, InputFile, ReconError, default_config, reconcile
+from recon import AppConfig, InputFile, ReconError, default_config
 from recon.errors import StepOrderError
-from recon.export import export_filename, export_workbook
-from recon.intake import combine, read_upload, sheet_info, summarize_incoming, summarize_original
+from recon.intake import read_upload, sheet_info, summarize_incoming, summarize_original
 from recon.match_models import Candidate
 from recon.matching import SwapRequiredError, UnknownRowError
+from recon.writeback import UnresolvedItemsError, export_filename, write_asset_ids
 
 from .schemas import (
     AssignmentRequest,
@@ -35,7 +36,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 log = logging.getLogger("recon.api")
 
-CONFLICTS = (StepOrderError, SwapRequiredError)  # -> 409
+CONFLICTS = (StepOrderError, SwapRequiredError, UnresolvedItemsError)  # -> 409
 NOT_FOUND = (UnknownRowError,)  # -> 404
 
 
@@ -304,21 +305,31 @@ def create_app(store: SessionStore | None = None, cfg: AppConfig | None = None) 
     @router.get(
         "/sessions/{session_id}/export",
         responses={
-            **STEP_ERRORS,
-            200: {"content": {XLSX_MEDIA_TYPE: {}}, "description": "The reconciled workbook"},
+            **ERRORS,
+            409: {
+                "model": ErrorResponse,
+                "description": "Matching has not run, or items are still unresolved "
+                "(code unresolved_items)",
+            },
+            200: {
+                "content": {XLSX_MEDIA_TYPE: {}},
+                "description": "The uploaded incoming workbook with its Asset IDs filled in",
+            },
         },
         response_class=Response,
     )
     def export(session: Session = Depends(get_session)) -> Response:
-        # Interim: the previous multi-sheet report. Replaced by the Asset-ID-only export next.
-        session.require_matching()
-        data = combine(session.original, session.incoming)
-        name = export_filename()
-        body = export_workbook(data.loaded, reconcile(data, session.cfg))
+        """The incoming file as uploaded, with only its Asset ID cells written. 409 while any
+        item is unresolved. The original inventory is never exported."""
+        matching = session.require_matching()
+        body = write_asset_ids(session.incoming, matching.result())
+        name = export_filename(session.incoming.file.name)
+        ascii_name = name.encode("ascii", "replace").decode().replace("?", "_")
+        disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
         return Response(
             content=body,
             media_type=XLSX_MEDIA_TYPE,
-            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+            headers={"Content-Disposition": disposition},
         )
 
     @router.delete("/sessions/{session_id}", status_code=204, responses=ERRORS)
